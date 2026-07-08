@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wimbledon$ Maximizer — Leaderboard</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<main>
+  <section class="hero">
+    <h1>Wimbledon$ Maximizer</h1>
+    <p>Build a day of meals that costs <strong>exactly 30 Wimbledons</strong>.
+       Not 29 Wimbledons. Not 31 Wimbledons. Rate and roast the combos below,
+       or <a href="/builder" style="color:var(--green-neon)">enter the competition</a> yourself.</p>
+    <div class="sort-toggle">
+      <button class="btn btn-sm" id="sort-top">Top rated</button>
+      <button class="btn btn-sm" id="sort-new">Newest</button>
+    </div>
+  </section>
+
+  <div class="combo-grid" id="grid"></div>
+  <p class="empty-hint" id="empty" style="display:none;text-align:center;margin-top:40px">
+    No combos yet — be the first to spend 30 Wimbledons perfectly.
+  </p>
+</main>
+
+<script type="module">
+import { renderNav, api, esc, wim, starBar, toast } from "/static/wim.js";
+renderNav("/");
+
+let combos = [];
+let sortMode = "top";
+const grid = document.getElementById("grid");
+
+function ratedKey(id) { return `wim_rated_${id}`; }
+
+function sortCombos() {
+  const arr = [...combos];
+  if (sortMode === "top") {
+    arr.sort((a, b) => b.rating_avg - a.rating_avg || b.rating_count - a.rating_count || b.id - a.id);
+  } else {
+    arr.sort((a, b) => b.id - a.id);
+  }
+  return arr;
+}
+
+function render() {
+  const arr = sortCombos();
+  document.getElementById("empty").style.display = arr.length ? "none" : "block";
+  grid.innerHTML = arr.map((c, i) => `
+    <article class="card" style="animation-delay:${(i * 0.7) % 4}s;animation-duration:${5.5 + (i % 3)}s" data-id="${c.id}">
+      <h3>${esc(c.name)}</h3>
+      <div class="byline">by ${esc(c.author)}</div>
+      <div class="items">
+        ${c.items.map(it => `
+          <div class="item-row">
+            <span class="emoji">${esc(it.emoji)}</span>
+            <span class="iname">${esc(it.meal_name)}${it.qty > 1 ? ` &times;${it.qty}` : ""}</span>
+            <span class="iprice">${wim(it.price_cents * it.qty)}</span>
+          </div>`).join("")}
+      </div>
+      <span class="badge-total">${wim(c.total_cents)} — exact!</span>
+      <div class="card-foot">
+        <span class="rate-zone">${starBar(c.rating_avg, c.rating_count, !localStorage.getItem(ratedKey(c.id)))}</span>
+        <button class="btn btn-sm toggle-comments">&#128172; ${c.comment_count}</button>
+      </div>
+      <div class="comments">
+        <div class="comment-list"><span class="empty-hint">Loading…</span></div>
+        <form class="comment-form">
+          <input name="author" placeholder="Name" required maxlength="40" style="max-width:110px">
+          <input name="text" placeholder="Say something…" required maxlength="500">
+          <button class="btn btn-sm btn-green">Post</button>
+        </form>
+      </div>
+    </article>`).join("");
+}
+
+async function loadComments(card, id) {
+  const list = card.querySelector(".comment-list");
+  const comments = await api("GET", `/api/combos/${id}/comments`);
+  list.innerHTML = comments.length
+    ? comments.map(c => `<div class="comment"><span class="cauthor">${esc(c.author)}</span>${esc(c.text)}</div>`).join("")
+    : `<span class="empty-hint">No comments yet.</span>`;
+}
+
+grid.addEventListener("click", async e => {
+  const card = e.target.closest(".card");
+  if (!card) return;
+  const id = Number(card.dataset.id);
+
+  const star = e.target.closest("[data-star]");
+  if (star && !star.closest(".stars").classList.contains("locked")) {
+    try {
+      const res = await api("POST", `/api/combos/${id}/rate`, { stars: Number(star.dataset.star) });
+      localStorage.setItem(ratedKey(id), "1");
+      const combo = combos.find(c => c.id === id);
+      combo.rating_avg = res.rating_avg;
+      combo.rating_count = res.rating_count;
+      card.querySelector(".rate-zone").innerHTML = starBar(res.rating_avg, res.rating_count, false);
+      toast(`Rated ${star.dataset.star} stars — thanks!`);
+    } catch (err) { toast(err.message, true); }
+    return;
+  }
+
+  if (e.target.closest(".toggle-comments")) {
+    const panel = card.querySelector(".comments");
+    panel.classList.toggle("open");
+    if (panel.classList.contains("open")) loadComments(card, id);
+  }
+});
+
+grid.addEventListener("submit", async e => {
+  e.preventDefault();
+  const card = e.target.closest(".card");
+  const id = Number(card.dataset.id);
+  const author = e.target.author.value.trim();
+  const text = e.target.text.value.trim();
+  if (!author || !text) return;
+  try {
+    await api("POST", `/api/combos/${id}/comments`, { author, text });
+    e.target.text.value = "";
+    const combo = combos.find(c => c.id === id);
+    combo.comment_count += 1;
+    card.querySelector(".toggle-comments").innerHTML = `&#128172; ${combo.comment_count}`;
+    loadComments(card, id);
+  } catch (err) { toast(err.message, true); }
+});
+
+document.getElementById("sort-top").onclick = () => { sortMode = "top"; render(); };
+document.getElementById("sort-new").onclick = () => { sortMode = "new"; render(); };
+
+combos = await api("GET", "/api/combos");
+render();
+</script>
+</body>
+</html>

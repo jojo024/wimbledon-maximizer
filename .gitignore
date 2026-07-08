@@ -1,0 +1,15 @@
+# runtime data
+wimbledon.db
+wimbledon.db-journal
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# editors / os
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

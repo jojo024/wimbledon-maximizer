@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wimbledon$ Maximizer — Basket Builder</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<main>
+  <h2 class="section-title">Basket Builder</h2>
+  <p class="section-sub">Drag floating meals into the basket. Hit <strong>exactly 30 Wimbledons</strong> to unlock the competition entry.</p>
+
+  <div class="builder-layout" style="display:grid;grid-template-columns:1.6fr 1fr;gap:24px;align-items:start">
+    <div class="arena" id="arena">
+      <div class="basket" id="basket">
+        <span>&#129387;</span>
+        <span class="hint">drop meals here</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3 style="margin:0 0 4px">Your basket</h3>
+      <div class="meter-wrap">
+        <div class="meter" id="meter"><div class="fill" id="meter-fill"></div></div>
+        <div class="meter-label">
+          <span class="total-now" id="total-label"></span>
+          <span id="status-label"></span>
+        </div>
+      </div>
+      <div class="basket-list" id="basket-list"></div>
+
+      <form id="submit-form" style="display:flex;flex-direction:column;gap:10px;margin-top:16px">
+        <label class="f">Combo name
+          <input name="name" placeholder="e.g. Midnight Ramen Run" required maxlength="60">
+        </label>
+        <label class="f">Your name
+          <input name="author" placeholder="Who maximized these Wimbledons?" required maxlength="40">
+        </label>
+        <button class="btn btn-green" id="submit-btn" disabled>Enter the competition</button>
+      </form>
+    </div>
+  </div>
+</main>
+
+<script type="module">
+import { renderNav, api, esc, wim, fmtW, toast } from "/static/wim.js";
+renderNav("/builder");
+
+const TARGET = 3000;
+const arena = document.getElementById("arena");
+const basketEl = document.getElementById("basket");
+const listEl = document.getElementById("basket-list");
+const meterEl = document.getElementById("meter");
+const fillEl = document.getElementById("meter-fill");
+const totalLabel = document.getElementById("total-label");
+const statusLabel = document.getElementById("status-label");
+const submitBtn = document.getElementById("submit-btn");
+
+let meals = [];
+const basket = new Map(); // meal_id -> qty
+
+function total() {
+  let t = 0;
+  for (const [id, qty] of basket) t += meals.find(m => m.id === id).price_cents * qty;
+  return t;
+}
+
+function renderBasket() {
+  const t = total();
+  listEl.innerHTML = basket.size === 0
+    ? `<span class="empty-hint">Basket is empty — drag something in.</span>`
+    : [...basket].map(([id, qty]) => {
+        const m = meals.find(x => x.id === id);
+        return `<div class="basket-row" data-id="${id}">
+          <span class="emoji">${esc(m.emoji)}</span>
+          <span class="bname">${esc(m.name)}</span>
+          <span class="qty-controls">
+            <button class="qbtn" data-act="dec">&minus;</button>
+            <span>${qty}</span>
+            <button class="qbtn" data-act="inc">+</button>
+          </span>
+          ${wim(m.price_cents * qty)}
+        </div>`;
+      }).join("");
+
+  const pct = Math.min(t / TARGET, 1) * 100;
+  fillEl.style.width = pct + "%";
+  meterEl.classList.toggle("exact", t === TARGET);
+  meterEl.classList.toggle("over", t > TARGET);
+  totalLabel.innerHTML = `${wim(t)} / ${wim(TARGET)} Wimbledons`;
+  if (t === TARGET) {
+    statusLabel.innerHTML = `<span class="exact-txt">EXACTLY 30 WIMBLEDONS!</span>`;
+  } else if (t > TARGET) {
+    statusLabel.innerHTML = `<span class="over-txt">${fmtW(t - TARGET)} Wimbledons over</span>`;
+  } else {
+    statusLabel.innerHTML = `${fmtW(TARGET - t)} Wimbledons to go`;
+  }
+  submitBtn.disabled = t !== TARGET;
+}
+
+listEl.addEventListener("click", e => {
+  const btn = e.target.closest(".qbtn");
+  if (!btn) return;
+  e.preventDefault();
+  const id = Number(btn.closest(".basket-row").dataset.id);
+  const qty = basket.get(id) + (btn.dataset.act === "inc" ? 1 : -1);
+  if (qty <= 0) basket.delete(id); else basket.set(id, qty);
+  renderBasket();
+});
+
+function addToBasket(id) {
+  basket.set(id, (basket.get(id) || 0) + 1);
+  basketEl.classList.remove("pop");
+  void basketEl.offsetWidth; // restart animation
+  basketEl.classList.add("pop");
+  renderBasket();
+}
+
+// --- floating chips + drag ---
+
+function scatterChips() {
+  const w = arena.clientWidth, h = arena.clientHeight;
+  const cx = w / 2, cy = h / 2;
+  meals.forEach((m, i) => {
+    const chip = document.createElement("div");
+    chip.className = "float-chip";
+    chip.dataset.id = m.id;
+    chip.style.animationDelay = `${(i * 0.45) % 4}s`;
+    chip.style.animationDuration = `${4.5 + (i % 4) * 0.7}s`;
+    chip.innerHTML = `<span class="emoji">${esc(m.emoji)}</span>
+      <span class="cname">${esc(m.name)}</span>
+      <span class="cprice">W$ ${fmtW(m.price_cents)}</span>`;
+    // two rings around the basket with jitter
+    const ring = i % 2;
+    const count = Math.ceil(meals.length / 2);
+    const angle = ((Math.floor(i / 2) / count) * 2 * Math.PI) + ring * 0.5 + (i % 3) * 0.15;
+    const rx = (ring ? 0.44 : 0.31) * w;
+    const ry = (ring ? 0.40 : 0.27) * h;
+    const x = cx + Math.cos(angle) * rx;
+    const y = cy + Math.sin(angle) * ry;
+    chip.style.left = `${Math.min(Math.max(x - 45, 4), w - 100)}px`;
+    chip.style.top = `${Math.min(Math.max(y - 34, 4), h - 78)}px`;
+    arena.appendChild(chip);
+  });
+}
+
+let drag = null;
+
+arena.addEventListener("pointerdown", e => {
+  const chip = e.target.closest(".float-chip");
+  if (!chip) return;
+  e.preventDefault();
+  chip.setPointerCapture(e.pointerId);
+  drag = { chip, startX: e.clientX, startY: e.clientY };
+  chip.classList.add("dragging");
+});
+
+arena.addEventListener("pointermove", e => {
+  if (!drag) return;
+  drag.chip.style.transform =
+    `translate(${e.clientX - drag.startX}px, ${e.clientY - drag.startY}px) scale(1.08)`;
+  const b = basketEl.getBoundingClientRect();
+  const over = e.clientX > b.left && e.clientX < b.right && e.clientY > b.top && e.clientY < b.bottom;
+  basketEl.classList.toggle("hot", over);
+});
+
+arena.addEventListener("pointerup", e => {
+  if (!drag) return;
+  const b = basketEl.getBoundingClientRect();
+  const over = e.clientX > b.left && e.clientX < b.right && e.clientY > b.top && e.clientY < b.bottom;
+  if (over) addToBasket(Number(drag.chip.dataset.id));
+  drag.chip.classList.remove("dragging");
+  drag.chip.style.transform = "";
+  basketEl.classList.remove("hot");
+  drag = null;
+});
+
+arena.addEventListener("pointercancel", () => {
+  if (!drag) return;
+  drag.chip.classList.remove("dragging");
+  drag.chip.style.transform = "";
+  basketEl.classList.remove("hot");
+  drag = null;
+});
+
+// --- submit ---
+
+document.getElementById("submit-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  if (total() !== TARGET) return;
+  const items = [...basket].map(([meal_id, qty]) => ({ meal_id, qty }));
+  try {
+    await api("POST", "/api/combos", {
+      name: e.target.name.value.trim(),
+      author: e.target.author.value.trim(),
+      items,
+    });
+    toast("Combo entered! Redirecting to the leaderboard…");
+    setTimeout(() => location.href = "/", 1400);
+  } catch (err) { toast(err.message, true); }
+});
+
+meals = await api("GET", "/api/meals");
+scatterChips();
+renderBasket();
+</script>
+</body>
+</html>

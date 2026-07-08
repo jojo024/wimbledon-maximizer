@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wimbledon$ Maximizer — Admin</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<main>
+  <h2 class="section-title">Admin console</h2>
+  <p class="section-sub">Edit the entire database: meals, combos, ratings, and comments.</p>
+
+  <div class="panel" id="login-panel" style="max-width:420px">
+    <label class="f">Admin key
+      <input type="password" id="admin-key" placeholder="Enter admin key">
+    </label>
+    <button class="btn btn-green" id="login-btn" style="margin-top:12px">Unlock</button>
+  </div>
+
+  <div id="console" style="display:none">
+    <div class="tabs">
+      <button data-tab="meals" class="active">Meals</button>
+      <button data-tab="combos">Combos</button>
+      <button data-tab="comments">Comments</button>
+    </div>
+    <div class="panel table-scroll" id="tab-content"></div>
+  </div>
+</main>
+
+<script type="module">
+import { renderNav, api, esc, fmtW, toast } from "/static/wim.js";
+renderNav("/admin");
+
+let KEY = sessionStorage.getItem("wim_admin_key") || "";
+let tab = "meals";
+const content = document.getElementById("tab-content");
+
+async function unlock(key) {
+  await api("GET", "/api/admin/verify", undefined, key);
+  KEY = key;
+  sessionStorage.setItem("wim_admin_key", key);
+  document.getElementById("login-panel").style.display = "none";
+  document.getElementById("console").style.display = "block";
+  loadTab();
+}
+
+document.getElementById("login-btn").onclick = async () => {
+  try { await unlock(document.getElementById("admin-key").value); }
+  catch { toast("Invalid admin key", true); }
+};
+document.getElementById("admin-key").addEventListener("keydown", e => {
+  if (e.key === "Enter") document.getElementById("login-btn").click();
+});
+
+document.querySelector(".tabs").addEventListener("click", e => {
+  const btn = e.target.closest("button[data-tab]");
+  if (!btn) return;
+  tab = btn.dataset.tab;
+  document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("active", b === btn));
+  loadTab();
+});
+
+async function loadTab() {
+  if (tab === "meals") {
+    const meals = await api("GET", "/api/meals");
+    content.innerHTML = `<table class="admin">
+      <tr><th>ID</th><th>Emoji</th><th>Name</th><th>Price (Wimbledons)</th><th>Added by</th><th></th></tr>
+      ${meals.map(m => `<tr data-id="${m.id}">
+        <td>${m.id}</td>
+        <td class="narrow"><input value="${esc(m.emoji)}" data-f="emoji" style="font-size:1.2rem"></td>
+        <td><input value="${esc(m.name)}" data-f="name"></td>
+        <td class="narrow"><input type="number" step="0.5" value="${fmtW(m.price_cents)}" data-f="price"></td>
+        <td>${esc(m.created_by || "")}</td>
+        <td style="white-space:nowrap">
+          <button class="btn btn-sm" data-act="save-meal">Save</button>
+          <button class="btn btn-sm btn-danger" data-act="del-meal">Delete</button>
+        </td></tr>`).join("")}
+    </table>`;
+  } else if (tab === "combos") {
+    const combos = await api("GET", "/api/combos");
+    content.innerHTML = `<table class="admin">
+      <tr><th>ID</th><th>Name</th><th>Author</th><th>Items</th><th>Rating</th><th></th></tr>
+      ${combos.map(c => `<tr data-id="${c.id}">
+        <td>${c.id}</td>
+        <td><input value="${esc(c.name)}" data-f="name"></td>
+        <td><input value="${esc(c.author)}" data-f="author"></td>
+        <td>${c.items.map(i => `${esc(i.emoji)}${i.qty > 1 ? "&times;" + i.qty : ""}`).join(" ")}</td>
+        <td>${c.rating_avg ? c.rating_avg.toFixed(1) : "–"} (${c.rating_count})</td>
+        <td style="white-space:nowrap">
+          <button class="btn btn-sm" data-act="save-combo">Save</button>
+          <button class="btn btn-sm" data-act="clear-ratings">Reset ratings</button>
+          <button class="btn btn-sm btn-danger" data-act="del-combo">Delete</button>
+        </td></tr>`).join("")}
+    </table>`;
+  } else {
+    const comments = await api("GET", "/api/admin/comments", undefined, KEY);
+    content.innerHTML = comments.length ? `<table class="admin">
+      <tr><th>ID</th><th>Combo</th><th>Author</th><th>Text</th><th>When</th><th></th></tr>
+      ${comments.map(c => `<tr data-id="${c.id}">
+        <td>${c.id}</td><td>${esc(c.combo_name)}</td><td>${esc(c.author)}</td>
+        <td>${esc(c.text)}</td><td>${esc(c.created_at)}</td>
+        <td><button class="btn btn-sm btn-danger" data-act="del-comment">Delete</button></td>
+      </tr>`).join("")}
+    </table>` : `<span class="empty-hint">No comments in the database.</span>`;
+  }
+}
+
+content.addEventListener("click", async e => {
+  const btn = e.target.closest("button[data-act]");
+  if (!btn) return;
+  const row = btn.closest("tr");
+  const id = Number(row.dataset.id);
+  const val = f => row.querySelector(`[data-f="${f}"]`).value;
+  try {
+    switch (btn.dataset.act) {
+      case "save-meal":
+        await api("PUT", `/api/admin/meals/${id}`,
+          { name: val("name"), emoji: val("emoji"), price: Number(val("price")) }, KEY);
+        toast("Meal saved"); break;
+      case "del-meal":
+        if (!confirm("Delete this meal? Existing combos keep their snapshot of it.")) return;
+        await api("DELETE", `/api/admin/meals/${id}`, undefined, KEY);
+        toast("Meal deleted"); loadTab(); break;
+      case "save-combo":
+        await api("PUT", `/api/admin/combos/${id}`,
+          { name: val("name"), author: val("author") }, KEY);
+        toast("Combo saved"); break;
+      case "clear-ratings":
+        if (!confirm("Reset all ratings for this combo?")) return;
+        await api("DELETE", `/api/admin/ratings/${id}`, undefined, KEY);
+        toast("Ratings reset"); loadTab(); break;
+      case "del-combo":
+        if (!confirm("Delete this combo with its ratings and comments?")) return;
+        await api("DELETE", `/api/admin/combos/${id}`, undefined, KEY);
+        toast("Combo deleted"); loadTab(); break;
+      case "del-comment":
+        await api("DELETE", `/api/admin/comments/${id}`, undefined, KEY);
+        toast("Comment deleted"); loadTab(); break;
+    }
+  } catch (err) { toast(err.message, true); }
+});
+
+if (KEY) unlock(KEY).catch(() => { KEY = ""; sessionStorage.removeItem("wim_admin_key"); });
+</script>
+</body>
+</html>
