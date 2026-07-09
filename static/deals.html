@@ -3,25 +3,28 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Wimbledon$ Maximizer — Basket Builder</title>
+  <title>Wimbledon$ Maximizer — Daily Deal</title>
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 <main>
-  <h2 class="section-title">Basket Builder</h2>
-  <p class="section-sub">Drag floating meals into the basket. Hit <strong>exactly 30 Wimbledons</strong> to unlock the competition entry.</p>
+  <h2 class="section-title">Daily Deal</h2>
+  <p class="section-sub">Log what you actually ate today — no need to hit exactly 30. Whoever gets
+    <strong>closest to 30 Wimbledons</strong> wins the day. One submission per day; resubmitting
+    today just corrects it. Miss a day and it counts as W$0 toward your all-time average, so the
+    <a href="/players" style="color:var(--green-neon)">Players</a> board rewards showing up daily.</p>
 
   <div class="builder-layout" style="display:grid;grid-template-columns:1.6fr 1fr;gap:24px;align-items:start">
     <div class="arena" id="arena">
       <div class="basket" id="basket">
-        <span>&#129387;</span>
-        <span class="hint">drop meals here</span>
+        <span>&#127942;</span>
+        <span class="hint">drop today's meals here</span>
       </div>
     </div>
 
     <div class="panel">
-      <h3 style="margin:0 0 4px">Your basket</h3>
+      <h3 style="margin:0 0 4px">Today's deal</h3>
       <div class="meter-wrap">
         <div class="meter" id="meter"><div class="fill" id="meter-fill"></div></div>
         <div class="meter-label">
@@ -32,11 +35,8 @@
       <div class="basket-list" id="basket-list"></div>
 
       <form id="submit-form" style="display:flex;flex-direction:column;gap:10px;margin-top:16px">
-        <label class="f">Combo name
-          <input name="name" placeholder="e.g. Midnight Ramen Run" required maxlength="60">
-        </label>
         <div id="identity-slot"></div>
-        <button class="btn btn-green" id="submit-btn" disabled>Enter the competition</button>
+        <button class="btn btn-green" id="submit-btn" disabled>Log today's deal</button>
       </form>
     </div>
   </div>
@@ -45,9 +45,10 @@
 <script type="module">
 import { renderNav, api, esc, wim, fmtW, toast, getSession, ensureNamed,
          identityLine, wireIdentityChange, initFloatingBasket } from "/static/wim.js";
-renderNav("/builder");
+renderNav("/deals");
 
 const TARGET = 3000;
+const VIS_CAP = TARGET * 2; // meter bar visualizes up to 60 Wimbledons
 const arena = document.getElementById("arena");
 const basketEl = document.getElementById("basket");
 const listEl = document.getElementById("basket-list");
@@ -69,8 +70,9 @@ function total() {
 
 function renderBasket() {
   const t = total();
+  const distance = Math.abs(t - TARGET);
   listEl.innerHTML = basket.size === 0
-    ? `<span class="empty-hint">Basket is empty — drag something in.</span>`
+    ? `<span class="empty-hint">Basket is empty — drag today's meals in.</span>`
     : [...basket].map(([id, qty]) => {
         const m = meals.find(x => x.id === id);
         return `<div class="basket-row" data-id="${id}">
@@ -85,19 +87,20 @@ function renderBasket() {
         </div>`;
       }).join("");
 
-  const pct = Math.min(t / TARGET, 1) * 100;
+  const pct = Math.min(t / VIS_CAP, 1) * 100;
   fillEl.style.width = pct + "%";
   meterEl.classList.toggle("exact", t === TARGET);
-  meterEl.classList.toggle("over", t > TARGET);
-  totalLabel.innerHTML = `${wim(t)} / ${wim(TARGET)} Wimbledons`;
+  totalLabel.innerHTML = `${wim(t)} today`;
   if (t === TARGET) {
-    statusLabel.innerHTML = `<span class="exact-txt">EXACTLY 30 WIMBLEDONS!</span>`;
+    statusLabel.innerHTML = `<span class="exact-txt">EXACTLY 30 — perfect score!</span>`;
   } else if (t > TARGET) {
-    statusLabel.innerHTML = `<span class="over-txt">${fmtW(t - TARGET)} Wimbledons over</span>`;
+    statusLabel.innerHTML = `${fmtW(distance)} Wimbledons over 30`;
+  } else if (t > 0) {
+    statusLabel.innerHTML = `${fmtW(distance)} Wimbledons under 30`;
   } else {
-    statusLabel.innerHTML = `${fmtW(TARGET - t)} Wimbledons to go`;
+    statusLabel.innerHTML = "";
   }
-  submitBtn.disabled = t !== TARGET;
+  submitBtn.disabled = basket.size === 0;
 }
 
 listEl.addEventListener("click", e => {
@@ -118,18 +121,18 @@ function addToBasket(id) {
   renderBasket();
 }
 
-// --- submit ---
-
 document.getElementById("submit-form").addEventListener("submit", async e => {
   e.preventDefault();
-  if (total() !== TARGET) return;
+  if (basket.size === 0) return;
   const name = await ensureNamed();
   if (!name) return;
   const items = [...basket].map(([meal_id, qty]) => ({ meal_id, qty }));
   try {
-    await api("POST", "/api/combos", { name: e.target.name.value.trim(), items });
-    toast("Combo entered! Redirecting to the leaderboard…");
-    setTimeout(() => location.href = "/", 1400);
+    const res = await api("POST", "/api/deals", { items });
+    toast(res.distance_cents === 0
+      ? "Perfect! Exactly 30 Wimbledons — today's deal is locked in."
+      : `Deal logged — W$${(res.distance_cents / 100).toFixed(2)} away from 30.`);
+    setTimeout(() => location.href = "/players", 1400);
   } catch (err) { toast(err.message, true); }
 });
 

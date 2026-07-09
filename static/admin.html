@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Wimbledon$ Maximizer — Admin</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -22,6 +23,7 @@
     <div class="tabs">
       <button data-tab="meals" class="active">Meals</button>
       <button data-tab="combos">Combos</button>
+      <button data-tab="deals">Daily Deals</button>
       <button data-tab="comments">Comments</button>
     </div>
     <div class="panel table-scroll" id="tab-content"></div>
@@ -61,6 +63,47 @@ document.querySelector(".tabs").addEventListener("click", e => {
   loadTab();
 });
 
+const TARGET = 3000;
+
+function itemRow(emoji = "", name = "", priceCents = 0, qty = 1) {
+  return `<div class="ie-row">
+    <input class="ie-emoji" data-f="emoji" value="${esc(emoji)}" maxlength="8" placeholder="🍽">
+    <input class="ie-name" data-f="meal_name" value="${esc(name)}" maxlength="60" placeholder="Item name">
+    <input class="ie-price" data-f="price" type="number" step="0.5" min="0.5" value="${fmtW(priceCents)}" title="Price in Wimbledons">
+    <input class="ie-qty" data-f="qty" type="number" min="1" max="20" value="${qty}" title="Quantity">
+    <button class="btn btn-sm btn-danger" data-act="rm-item" title="Remove">&times;</button>
+  </div>`;
+}
+
+function itemEditor(items) {
+  return `<div class="item-editor">
+    <div class="ie-rows">${items.map(i => itemRow(i.emoji, i.meal_name, i.price_cents, i.qty)).join("")}</div>
+    <div class="ie-foot">
+      <button class="btn btn-sm" data-act="add-item">+ Add item</button>
+      <span class="ie-total"></span>
+      <button class="btn btn-sm btn-green" data-act="save-items" disabled>Save items</button>
+    </div>
+  </div>`;
+}
+
+// Collect {price_cents, qty} and update the live total + save button for one editor.
+function recomputeEditor(editor) {
+  let total = 0;
+  editor.querySelectorAll(".ie-row").forEach(row => {
+    const price = Math.round(Number(row.querySelector(".ie-price").value) * 100) || 0;
+    const qty = Number(row.querySelector(".ie-qty").value) || 0;
+    total += price * qty;
+  });
+  const label = editor.querySelector(".ie-total");
+  const off = total - TARGET;
+  label.textContent = off === 0
+    ? `${fmtW(total)} — exactly 30 Wimbledons`
+    : `${fmtW(total)} Wimbledons (${off > 0 ? "+" : ""}${fmtW(off)})`;
+  label.classList.toggle("ok", off === 0);
+  editor.querySelector('[data-act="save-items"]').disabled = off !== 0;
+  return total;
+}
+
 async function loadTab() {
   if (tab === "meals") {
     const meals = await api("GET", "/api/meals");
@@ -89,10 +132,25 @@ async function loadTab() {
         <td>${c.rating_avg ? c.rating_avg.toFixed(1) : "–"} (${c.rating_count})</td>
         <td style="white-space:nowrap">
           <button class="btn btn-sm" data-act="save-combo">Save</button>
+          <button class="btn btn-sm" data-act="edit-items">Items</button>
           <button class="btn btn-sm" data-act="clear-ratings">Reset ratings</button>
           <button class="btn btn-sm btn-danger" data-act="del-combo">Delete</button>
-        </td></tr>`).join("")}
+        </td></tr>
+        <tr class="combo-editor" data-editor="${c.id}" style="display:none">
+          <td colspan="6">${itemEditor(c.items)}</td>
+        </tr>`).join("")}
     </table>`;
+  } else if (tab === "deals") {
+    const deals = await api("GET", "/api/admin/deals", undefined, KEY);
+    content.innerHTML = deals.length ? `<table class="admin">
+      <tr><th>ID</th><th>Player</th><th>Date</th><th>Total</th><th>Distance</th><th></th></tr>
+      ${deals.map(d => `<tr data-id="${d.id}">
+        <td>${d.id}</td><td>${esc(d.name)}</td><td>${esc(d.deal_date)}</td>
+        <td>${fmtW(d.total_cents)}</td>
+        <td>${d.distance_cents === 0 ? "exact!" : fmtW(d.distance_cents)}</td>
+        <td><button class="btn btn-sm btn-danger" data-act="del-deal">Delete</button></td>
+      </tr>`).join("")}
+    </table>` : `<span class="empty-hint">No daily deals logged yet.</span>`;
   } else {
     const comments = await api("GET", "/api/admin/comments", undefined, KEY);
     content.innerHTML = comments.length ? `<table class="admin">
@@ -106,14 +164,49 @@ async function loadTab() {
   }
 }
 
+// live total as prices/quantities are typed in an open item editor
+content.addEventListener("input", e => {
+  const editor = e.target.closest(".item-editor");
+  if (editor) recomputeEditor(editor);
+});
+
 content.addEventListener("click", async e => {
   const btn = e.target.closest("button[data-act]");
   if (!btn) return;
+  const act = btn.dataset.act;
+
+  // combo item-editor actions live inside the .combo-editor row
+  if (act === "add-item" || act === "rm-item" || act === "save-items") {
+    e.preventDefault();
+    const editorRow = btn.closest("tr.combo-editor");
+    const cid = Number(editorRow.dataset.editor);
+    const editor = editorRow.querySelector(".item-editor");
+    if (act === "add-item") {
+      editor.querySelector(".ie-rows").insertAdjacentHTML("beforeend", itemRow());
+      recomputeEditor(editor);
+    } else if (act === "rm-item") {
+      btn.closest(".ie-row").remove();
+      recomputeEditor(editor);
+    } else {
+      const items = [...editor.querySelectorAll(".ie-row")].map(r => ({
+        emoji: r.querySelector(".ie-emoji").value.trim(),
+        meal_name: r.querySelector(".ie-name").value.trim(),
+        price_cents: Math.round(Number(r.querySelector(".ie-price").value) * 100),
+        qty: Number(r.querySelector(".ie-qty").value),
+      }));
+      try {
+        await api("PUT", `/api/admin/combos/${cid}/items`, { items }, KEY);
+        toast("Combo items saved"); loadTab();
+      } catch (err) { toast(err.message, true); }
+    }
+    return;
+  }
+
   const row = btn.closest("tr");
   const id = Number(row.dataset.id);
   const val = f => row.querySelector(`[data-f="${f}"]`).value;
   try {
-    switch (btn.dataset.act) {
+    switch (act) {
       case "save-meal":
         await api("PUT", `/api/admin/meals/${id}`,
           { name: val("name"), emoji: val("emoji"), price: Number(val("price")) }, KEY);
@@ -126,6 +219,13 @@ content.addEventListener("click", async e => {
         await api("PUT", `/api/admin/combos/${id}`,
           { name: val("name"), author: val("author") }, KEY);
         toast("Combo saved"); break;
+      case "edit-items": {
+        const editorRow = content.querySelector(`tr.combo-editor[data-editor="${id}"]`);
+        const show = editorRow.style.display === "none";
+        editorRow.style.display = show ? "table-row" : "none";
+        if (show) recomputeEditor(editorRow.querySelector(".item-editor"));
+        break;
+      }
       case "clear-ratings":
         if (!confirm("Reset all ratings for this combo?")) return;
         await api("DELETE", `/api/admin/ratings/${id}`, undefined, KEY);
@@ -137,6 +237,10 @@ content.addEventListener("click", async e => {
       case "del-comment":
         await api("DELETE", `/api/admin/comments/${id}`, undefined, KEY);
         toast("Comment deleted"); loadTab(); break;
+      case "del-deal":
+        if (!confirm("Delete this daily deal entry?")) return;
+        await api("DELETE", `/api/admin/deals/${id}`, undefined, KEY);
+        toast("Deal deleted"); loadTab(); break;
     }
   } catch (err) { toast(err.message, true); }
 });

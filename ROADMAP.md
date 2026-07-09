@@ -38,7 +38,85 @@ ratings and comments, admin console, W$ glyph, purple/green futuristic theme.
 5. **Rate limiting** — `main.py`. Simple in-memory token bucket per client IP on
    POST endpoints; 429 with a friendly Wimbledons-themed message.
 
-## v0.3.0 — Seasons and polish
+> **Status:** Shipped.
+
+## v0.3.0 — Player leaderboard, comment quality & identity integrity
+
+| # | Item | Effort | Why now |
+|---|------|--------|---------|
+| 1 | Identity lock-down: author always server-derived from session | S | v0.2.0 added session identity but forms still let you type any name at post time — trivially spoofable |
+| 2 | Daily Deal + Players leaderboard | M | A second game mode: log any real daily total (not exactly 30) and rank players by closeness to 30, all-time |
+| 3 | Comment upvotes + "top comment" surfaced on the card | S | Best commentary should be visible on the leaderboard, not buried in a click-to-open panel |
+| 4 | Basket Builder chips wander continuously, not just bob in place | XS | The float animation was static-position; a little chaos makes drag-and-drop more fun |
+| 5 | W-glyph favicon | XS | Every other surface uses the glyph; the browser tab didn't |
+| 6 | Rebrand: horizontal-strikethrough glyph | XS | Vertical dollar-stroke read as generic currency; a horizontal strike (Won/Yen-style) is more distinctive and still reads as a struck-through W |
+
+### Item details
+
+1. **Identity lock-down** — `main.py`, all four page scripts. `MealIn`/`ComboIn`/`CommentIn`
+   drop their free-text `author`/`created_by` fields entirely; every write endpoint derives
+   the author from the session's `display_name` via `require_named()`, which 400s if no
+   name is set yet. Forms show a read-only "Posting as `<name>` · change" line instead of
+   an editable box; changing your handle is a deliberate, separate action, never bundled
+   into a post.
+2. **Daily Deal / Players** — `main.py`, `static/deals.html`, `static/players.html`.
+   `daily_deals`/`daily_deal_items` tables, one row per `(voter_id, deal_date)` (upsert on
+   resubmit, same day only). `/api/deals/today` ranks today's submissions by distance from
+   30 Wimbledons; `/api/deals/leaderboard` computes each player's all-time average distance
+   since their first submission, counting any skipped day as W$0 spent (max distance), plus
+   a current streak. Rewards showing up every day, not just spending a lot once.
+3. **Comment upvotes** — `main.py`, `static/index.html`. `comment_votes` table
+   (one toggleable upvote per session per comment); comments sort by score; the
+   highest-voted comment for a combo (if any) is surfaced directly on the card via
+   `top_comment`, live-patched over `/ws/feed`.
+4. **Wandering chips** — `static/wim.js` (`initFloatingBasket`), `static/style.css`.
+   Chips live in a `.chip-wrap` that a `requestAnimationFrame` loop drifts around the arena
+   (bouncing off the edges) while the inner `.float-chip` keeps its own CSS bob animation —
+   two independent motions on nested elements so their `transform`s don't fight, and dragging
+   pauses just the one chip being moved.
+5. **Favicon** — `static/favicon.svg`, all `<head>`s. Same path data as `WIM_SVG`.
+6. **Rebrand** — `static/wim.js`, `static/favicon.svg`. `WIM_SVG`'s second path changed
+   from a vertical stroke (`M12 2.5 V21.5`, dollar-sign style) to a horizontal one
+   (`M2 12 H22`, Won/Yen style). The W zigzag itself is unchanged. "Wimbledon$" (with a
+   literal dollar sign) remains correct in prose and headings — only the glyph's stroke
+   orientation changed.
+
+> **Status:** Shipped.
+
+## v0.3.1 — Arena polish & consolidation (planned, not yet built)
+
+| # | Item | Effort | Why now |
+|---|------|--------|---------|
+| 1 | Move the basket to the side of the arena | XS | Wandering chips currently drift across the drop zone and visually block it |
+| 2 | Wandering chips treat the basket as an obstacle | S | Repositioning alone doesn't stop chips drifting back over it; needs a bounce rule, not just a new resting position |
+| 3 | Bump physics while dragging | S | The chip under your cursor should nudge others out of the way — fun, and reinforces that the arena is "alive" |
+| 4 | Expand the emoji picker | XS | 48 curated emojis is a small slice of the Unicode food/drink block |
+| 5 | **Decide:** consolidate Basket Builder + Daily Deal | M | They're the same drag-a-basket interaction; only the submit-time validation differs |
+
+### Design note: consolidating Basket Builder and Daily Deal
+
+Both `/builder` and `/deals` scatter the same meal pool into the same arena and differ
+only in what happens at submit time: `/builder` requires exactly 3000 cents and posts a
+named `Combo`; `/deals` accepts any total and posts today's `daily_deals` row. That's a
+real duplication — same `initFloatingBasket()` call, same meter/basket-list markup,
+same page shell, in two files.
+
+**Suggested fix:** merge into one page. On submit, always upsert today's Daily Deal
+(any total, one per day, exactly like `/deals` now); *additionally*, if the total is
+exactly 3000 cents, prompt for a combo name and also post it to the competition
+leaderboard. One interaction, one arena, two possible outcomes depending on what you
+built — instead of asking the user to pick the "right" page up front.
+
+**Alternative**, if the two are meant to stay conceptually separate (competition entries
+vs. daily tracking): keep both pages but extract the now-duplicated basket/meter markup
+and submit-flow scaffolding into one shared piece, parameterized by "exact-only" vs.
+"any total" and the submit endpoint. Lower risk, less of a UX change, still kills the
+duplication.
+
+This needs a product decision (merge vs. keep-separate-but-de-duplicate) before either
+is implemented — flagged in [TODO.md](TODO.md) rather than built speculatively.
+
+## v0.4.0 — Seasons and polish
 
 | # | Item | Effort | Why now |
 |---|------|--------|---------|

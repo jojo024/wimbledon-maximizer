@@ -1,6 +1,7 @@
 # runtime data
 wimbledon.db
 wimbledon.db-journal
+.wim_secret
 
 # python
 __pycache__/

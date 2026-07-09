@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Wimbledon$ Maximizer — Add Meals</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -20,13 +21,11 @@
       <label class="f">Price in Wimbledons (W$)
         <input name="price" type="number" step="0.5" min="0.5" max="30" placeholder="e.g. 7.5" required>
       </label>
-      <label class="f">Your name (optional)
-        <input name="created_by" placeholder="Who ate this?" maxlength="40">
-      </label>
       <label class="f">Pick an emoji
         <input name="emoji" placeholder="…or type any emoji here" maxlength="8" required style="font-size:1.3rem">
       </label>
       <div class="emoji-grid" id="emoji-grid"></div>
+      <div id="identity-slot"></div>
       <button class="btn btn-green" style="margin-top:6px">Add to the meal pool</button>
     </form>
 
@@ -39,7 +38,8 @@
 </main>
 
 <script type="module">
-import { renderNav, api, esc, fmtW, toast } from "/static/wim.js";
+import { renderNav, api, esc, fmtW, toast, getSession, ensureNamed,
+         identityLine, wireIdentityChange } from "/static/wim.js";
 renderNav("/meals");
 
 const EMOJIS = [
@@ -70,12 +70,13 @@ async function loadPool() {
 
 form.addEventListener("submit", async e => {
   e.preventDefault();
+  const name = await ensureNamed();
+  if (!name) return;
   try {
     await api("POST", "/api/meals", {
       name: form.name.value.trim(),
       emoji: form.emoji.value.trim(),
       price: Number(form.price.value),
-      created_by: form.created_by.value.trim(),
     });
     toast(`${form.emoji.value} added for W$ ${fmtW(Math.round(form.price.value * 100))} Wimbledons`);
     form.reset();
@@ -85,6 +86,14 @@ form.addEventListener("submit", async e => {
 });
 
 loadPool();
+
+const identitySlot = document.getElementById("identity-slot");
+const session = await getSession();
+identitySlot.innerHTML = identityLine(session.name || "not set yet");
+wireIdentityChange(identitySlot, name => {
+  session.name = name;
+  identitySlot.querySelector("b").textContent = name;
+});
 </script>
 </body>
 </html>

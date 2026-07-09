@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Wimbledon$ Maximizer — Leaderboard</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -26,14 +27,15 @@
 </main>
 
 <script type="module">
-import { renderNav, api, esc, wim, starBar, toast } from "/static/wim.js";
+import { renderNav, api, esc, wim, starBar, toast,
+         getSession, namePrompt, ensureNamed, identityLine, wireIdentityChange,
+         connectFeed } from "/static/wim.js";
 renderNav("/");
 
 let combos = [];
+let session = { name: "" };
 let sortMode = "top";
 const grid = document.getElementById("grid");
-
-function ratedKey(id) { return `wim_rated_${id}`; }
 
 function sortCombos() {
   const arr = [...combos];
@@ -61,26 +63,93 @@ function render() {
           </div>`).join("")}
       </div>
       <span class="badge-total">${wim(c.total_cents)} — exact!</span>
+      ${c.top_comment ? topCommentHtml(c.top_comment) : ""}
       <div class="card-foot">
-        <span class="rate-zone">${starBar(c.rating_avg, c.rating_count, !localStorage.getItem(ratedKey(c.id)))}</span>
+        <span class="rate-zone">${starBar(c.rating_avg, c.rating_count, true, c.my_rating)}</span>
         <button class="btn btn-sm toggle-comments">&#128172; ${c.comment_count}</button>
       </div>
       <div class="comments">
         <div class="comment-list"><span class="empty-hint">Loading…</span></div>
+        ${identityLine(session.name || "…")}
         <form class="comment-form">
-          <input name="author" placeholder="Name" required maxlength="40" style="max-width:110px">
           <input name="text" placeholder="Say something…" required maxlength="500">
           <button class="btn btn-sm btn-green">Post</button>
         </form>
       </div>
     </article>`).join("");
+  wireIdentityChange(grid, name => {
+    session.name = name;
+    grid.querySelectorAll(".identity-line b").forEach(b => b.textContent = name);
+  });
+}
+
+function cardFor(id) { return grid.querySelector(`.card[data-id="${id}"]`); }
+
+function topCommentHtml(tc) {
+  return `<div class="top-comment">
+    <span class="tc-badge" title="Top comment">&#127942;</span>
+    <span class="tc-body"><span class="tc-author">${esc(tc.author)}</span>${esc(tc.text)}</span>
+  </div>`;
+}
+
+// Insert/update/remove the "top comment" snippet on a card without a full re-render.
+function patchTopComment(card, tc) {
+  if (!card) return;
+  let el = card.querySelector(".top-comment");
+  if (!tc) { if (el) el.remove(); return; }
+  if (el) {
+    el.querySelector(".tc-body").innerHTML = `<span class="tc-author">${esc(tc.author)}</span>${esc(tc.text)}`;
+  } else {
+    card.querySelector(".badge-total").insertAdjacentHTML("afterend", topCommentHtml(tc));
+  }
+}
+
+function glow(card) {
+  if (!card) return;
+  card.classList.remove("glow");
+  void card.offsetWidth; // restart animation
+  card.classList.add("glow");
+  card.addEventListener("animationend", () => card.classList.remove("glow"), { once: true });
+}
+
+// Patch a single card's rating in place, preserving the viewer's own vote note.
+function patchRating(id, avg, count) {
+  const combo = combos.find(c => c.id === id);
+  if (!combo) return;
+  combo.rating_avg = avg;
+  combo.rating_count = count;
+  const card = cardFor(id);
+  if (card) {
+    card.querySelector(".rate-zone").innerHTML = starBar(avg, count, true, combo.my_rating);
+    glow(card);
+  }
+}
+
+function patchComments(id, count, topComment) {
+  const combo = combos.find(c => c.id === id);
+  if (!combo) return;
+  combo.comment_count = count;
+  combo.top_comment = topComment;
+  const card = cardFor(id);
+  if (card) {
+    card.querySelector(".toggle-comments").innerHTML = `&#128172; ${count}`;
+    patchTopComment(card, topComment);
+    if (card.querySelector(".comments").classList.contains("open")) loadComments(card, id);
+    glow(card);
+  }
 }
 
 async function loadComments(card, id) {
   const list = card.querySelector(".comment-list");
   const comments = await api("GET", `/api/combos/${id}/comments`);
   list.innerHTML = comments.length
-    ? comments.map(c => `<div class="comment"><span class="cauthor">${esc(c.author)}</span>${esc(c.text)}</div>`).join("")
+    ? comments.map((c, i) => `
+        <div class="comment${c.votes > 0 && i === 0 ? " top" : ""}" data-id="${c.id}">
+          <button class="cvote${c.my_vote ? " voted" : ""}" data-act="vote-comment" title="Upvote this comment">
+            &#9650;<span class="cvote-n">${c.votes}</span>
+          </button>
+          <div class="ctext"><span class="cauthor">${esc(c.author)}</span>${esc(c.text)}</div>
+        </div>`).join("")
     : `<span class="empty-hint">No comments yet.</span>`;
 }
 
@@ -91,14 +160,15 @@ grid.addEventListener("click", async e => {
 
   const star = e.target.closest("[data-star]");
   if (star && !star.closest(".stars").classList.contains("locked")) {
+    const stars = Number(star.dataset.star);
     try {
-      const res = await api("POST", `/api/combos/${id}/rate`, { stars: Number(star.dataset.star) });
-      localStorage.setItem(ratedKey(id), "1");
+      const res = await api("POST", `/api/combos/${id}/rate`, { stars });
       const combo = combos.find(c => c.id === id);
       combo.rating_avg = res.rating_avg;
       combo.rating_count = res.rating_count;
-      card.querySelector(".rate-zone").innerHTML = starBar(res.rating_avg, res.rating_count, false);
-      toast(`Rated ${star.dataset.star} stars — thanks!`);
+      combo.my_rating = res.my_rating;
+      card.querySelector(".rate-zone").innerHTML = starBar(res.rating_avg, res.rating_count, true, res.my_rating);
+      toast(`Rated ${stars} stars — thanks!`);
     } catch (err) { toast(err.message, true); }
     return;
   }
@@ -107,6 +177,17 @@ grid.addEventListener("click", async e => {
     const panel = card.querySelector(".comments");
     panel.classList.toggle("open");
     if (panel.classList.contains("open")) loadComments(card, id);
+    return;
+  }
+
+  const voteBtn = e.target.closest('[data-act="vote-comment"]');
+  if (voteBtn) {
+    const commentId = Number(voteBtn.closest(".comment").dataset.id);
+    try {
+      const res = await api("POST", `/api/comments/${commentId}/vote`);
+      voteBtn.classList.toggle("voted", res.my_vote);
+      voteBtn.querySelector(".cvote-n").textContent = res.votes;
+    } catch (err) { toast(err.message, true); }
   }
 });
 
@@ -114,11 +195,16 @@ grid.addEventListener("submit", async e => {
   e.preventDefault();
   const card = e.target.closest(".card");
   const id = Number(card.dataset.id);
-  const author = e.target.author.value.trim();
   const text = e.target.text.value.trim();
-  if (!author || !text) return;
+  if (!text) return;
+  const name = await ensureNamed();
+  if (!name) return;
+  if (name !== session.name) {
+    session.name = name;
+    grid.querySelectorAll(".identity-line b").forEach(b => b.textContent = name);
+  }
   try {
-    await api("POST", `/api/combos/${id}/comments`, { author, text });
+    await api("POST", `/api/combos/${id}/comments`, { text });
     e.target.text.value = "";
     const combo = combos.find(c => c.id === id);
     combo.comment_count += 1;
@@ -130,8 +216,46 @@ grid.addEventListener("submit", async e => {
 document.getElementById("sort-top").onclick = () => { sortMode = "top"; render(); };
 document.getElementById("sort-new").onclick = () => { sortMode = "new"; render(); };
 
+// --- live feed: patch the leaderboard as events arrive ---
+connectFeed(ev => {
+  if (ev.type === "rating") {
+    patchRating(ev.combo_id, ev.rating_avg, ev.rating_count);
+  } else if (ev.type === "comment") {
+    patchComments(ev.combo_id, ev.comment_count, ev.top_comment);
+  } else if (ev.type === "comment_vote") {
+    const combo = combos.find(c => c.id === ev.combo_id);
+    if (combo) combo.top_comment = ev.top_comment;
+    const card = cardFor(ev.combo_id);
+    if (card) {
+      patchTopComment(card, ev.top_comment);
+      const commentEl = card.querySelector(`.comment[data-id="${ev.comment_id}"]`);
+      if (commentEl) commentEl.querySelector(".cvote-n").textContent = ev.votes;
+      glow(card);
+    }
+  } else if (ev.type === "combo_new") {
+    if (!combos.some(c => c.id === ev.combo.id)) {
+      combos.push(ev.combo);
+      render();
+      glow(cardFor(ev.combo.id));
+    }
+  } else if (ev.type === "combo_update") {
+    const i = combos.findIndex(c => c.id === ev.combo.id);
+    if (i !== -1) {
+      ev.combo.my_rating = combos[i].my_rating; // broadcast omits per-viewer state
+      combos[i] = ev.combo;
+      render();
+      glow(cardFor(ev.combo.id));
+    }
+  } else if (ev.type === "combo_delete") {
+    const i = combos.findIndex(c => c.id === ev.combo_id);
+    if (i !== -1) { combos.splice(i, 1); render(); }
+  }
+});
+
+session = await getSession();
 combos = await api("GET", "/api/combos");
 render();
+if (!session.name) namePrompt().then(name => { if (name) session.name = name; render(); });
 </script>
 </body>
 </html>

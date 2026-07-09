@@ -109,6 +109,8 @@ nav.wim-nav .spacer { flex: 1; }
 }
 
 .card {
+  position: relative;
+  z-index: 1;
   background: linear-gradient(160deg, var(--glass-strong), rgba(13, 8, 25, 0.6));
   border: 1px solid var(--glass-border);
   border-radius: var(--radius);
@@ -119,10 +121,16 @@ nav.wim-nav .spacer { flex: 1; }
   animation: floaty 6s ease-in-out infinite;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
-.card:hover {
+/* Floating neighbors have no fixed stacking order, so a card being interacted
+   with (hovered, focused, or with its comments open) needs to win the paint
+   order explicitly — otherwise a still-floating card can drift on top of it. */
+.card:hover,
+.card:focus-within,
+.card:has(.comments.open) {
   border-color: rgba(110, 231, 160, 0.5);
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5), 0 0 26px rgba(110, 231, 160, 0.12);
   animation-play-state: paused;
+  z-index: 20;
 }
 
 @keyframes floaty {
@@ -158,6 +166,15 @@ nav.wim-nav .spacer { flex: 1; }
 .stars:not(.locked) span:hover { transform: scale(1.25); }
 .stars.locked { cursor: default; }
 .rating-meta { color: var(--muted); font-size: 0.8rem; margin-left: 6px; }
+.rating-meta.mine { color: var(--green-neon); }
+
+/* live-feed change highlight */
+@keyframes glowpulse {
+  0%   { box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(110, 231, 160, 0); }
+  30%  { box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5), 0 0 30px rgba(110, 231, 160, 0.55); }
+  100% { box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(110, 231, 160, 0); }
+}
+.card.glow { animation: glowpulse 1.6s ease-out; }
 
 /* ---------- buttons / inputs ---------- */
 
@@ -192,12 +209,41 @@ input::placeholder, textarea::placeholder { color: #5e5580; }
 
 label.f { display: flex; flex-direction: column; gap: 6px; font-size: 0.85rem; color: var(--muted); font-weight: 600; }
 
+.identity-line { font-size: 0.85rem; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.identity-line b { color: var(--text); }
+.link-btn {
+  font: inherit; font-size: 0.8rem; font-weight: 700; color: var(--green-neon);
+  background: none; border: none; padding: 0; cursor: pointer; text-decoration: underline;
+}
+.link-btn:hover { color: var(--green); }
+
 /* ---------- comments ---------- */
+
+/* top-comment snippet, surfaced on the card without opening the comments panel */
+.top-comment {
+  display: flex; gap: 8px; align-items: flex-start;
+  margin-top: 10px; padding: 8px 12px; border-radius: 10px; font-size: 0.85rem;
+  background: rgba(139, 92, 246, 0.12); border: 1px solid rgba(139, 92, 246, 0.28);
+}
+.top-comment .tc-badge { flex: none; font-size: 0.95rem; }
+.top-comment .tc-body { color: var(--muted); }
+.top-comment .tc-author { color: var(--purple-bright); font-weight: 700; margin-right: 5px; }
 
 .comments { border-top: 1px dashed rgba(139, 92, 246, 0.25); margin-top: 12px; padding-top: 12px; display: none; }
 .comments.open { display: block; }
-.comment { padding: 8px 12px; border-radius: 10px; background: rgba(8, 5, 15, 0.5); margin-bottom: 8px; font-size: 0.9rem; }
+.comment { display: flex; gap: 10px; align-items: flex-start; padding: 8px 12px; border-radius: 10px; background: rgba(8, 5, 15, 0.5); margin-bottom: 8px; font-size: 0.9rem; }
+.comment.top { border: 1px solid rgba(110, 231, 160, 0.4); box-shadow: 0 0 12px rgba(110, 231, 160, 0.15); }
+.comment .ctext { flex: 1; }
 .comment .cauthor { color: var(--purple-bright); font-weight: 700; margin-right: 6px; }
+.comment .cvote {
+  flex: none; display: flex; flex-direction: column; align-items: center; gap: 1px;
+  background: transparent; border: 1px solid var(--glass-border); border-radius: 8px;
+  color: var(--muted); font-size: 0.65rem; padding: 4px 8px; cursor: pointer; line-height: 1.3;
+  transition: all 0.15s;
+}
+.comment .cvote:hover { border-color: var(--green-neon); color: var(--text); }
+.comment .cvote.voted { color: var(--green-neon); border-color: var(--green-neon); background: rgba(34, 197, 94, 0.12); }
+.comment .cvote-n { font-weight: 700; font-size: 0.82rem; }
 .comment-form { display: flex; gap: 8px; margin-top: 10px; }
 .comment-form input { flex: 1; padding: 8px 12px; }
 
@@ -228,8 +274,13 @@ label.f { display: flex; flex-direction: column; gap: 6px; font-size: 0.85rem; c
 .basket.pop { animation: pop 0.35s ease; }
 @keyframes pop { 0% { transform: translate(-50%, -50%) scale(1); } 40% { transform: translate(-50%, -50%) scale(1.14); } 100% { transform: translate(-50%, -50%) scale(1); } }
 
+/* .chip-wrap owns the absolute position and is moved every frame by the JS
+   wander loop; .float-chip only bobs (CSS animation) so the two motions
+   apply to different elements and never fight over the `transform` property. */
+.chip-wrap { position: absolute; }
+
 .float-chip {
-  position: absolute; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px;
   padding: 10px 14px; border-radius: 16px; cursor: grab; user-select: none;
   background: linear-gradient(160deg, var(--glass-strong), rgba(13, 8, 25, 0.75));
   border: 1px solid var(--glass-border);
@@ -292,6 +343,18 @@ label.f { display: flex; flex-direction: column; gap: 6px; font-size: 0.85rem; c
 .meal-chip .emoji { font-size: 1.2rem; }
 .meal-chip .price { color: var(--green-neon); font-weight: 700; }
 
+/* ---------- players / rankings ---------- */
+
+.rank-row {
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px;
+  background: rgba(8, 5, 15, 0.5); border: 1px solid rgba(139, 92, 246, 0.15); margin-bottom: 8px;
+}
+.rank-row.mine { border-color: rgba(110, 231, 160, 0.5); box-shadow: 0 0 14px rgba(110, 231, 160, 0.15); }
+.rank-row .rank-badge { flex: none; width: 32px; text-align: center; font-weight: 800; }
+.rank-row .rank-name { flex: 1; font-weight: 700; }
+.rank-row .rank-total { color: var(--muted); }
+.rank-row .rank-dist { color: var(--green-neon); font-weight: 700; font-size: 0.88rem; min-width: 80px; text-align: right; }
+
 /* ---------- admin ---------- */
 
 table.admin { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
@@ -300,6 +363,20 @@ table.admin td { padding: 8px 10px; border-bottom: 1px solid rgba(139, 92, 246, 
 table.admin input { padding: 6px 10px; border-radius: 9px; width: 100%; }
 table.admin td.narrow input { width: 72px; }
 .table-scroll { overflow-x: auto; }
+
+/* combo item editor (admin) */
+tr.combo-editor > td { background: rgba(8, 5, 15, 0.4); padding: 0 10px 14px; }
+.item-editor { display: flex; flex-direction: column; gap: 8px; padding: 6px 0; }
+.ie-rows { display: flex; flex-direction: column; gap: 6px; }
+.ie-row { display: flex; gap: 8px; align-items: center; }
+.ie-row input { padding: 6px 10px; border-radius: 9px; }
+.ie-row .ie-emoji { width: 54px; font-size: 1.2rem; text-align: center; flex: none; }
+.ie-row .ie-name { flex: 1; min-width: 120px; }
+.ie-row .ie-price, .ie-row .ie-qty { width: 76px; flex: none; }
+.ie-row button { flex: none; }
+.ie-foot { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
+.ie-foot .ie-total { flex: 1; color: var(--muted); font-size: 0.85rem; font-weight: 700; }
+.ie-foot .ie-total.ok { color: var(--green-neon); text-shadow: 0 0 10px rgba(110, 231, 160, 0.5); }
 
 .tabs { display: flex; gap: 8px; margin: 18px 0; }
 .tabs button {
@@ -319,6 +396,28 @@ table.admin td.narrow input { width: 72px; }
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 .toast.err { background: linear-gradient(92deg, rgba(220, 38, 38, 0.92), rgba(248, 113, 113, 0.92)); color: #fff; }
+
+/* ---------- modal ---------- */
+
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+  background: rgba(4, 2, 10, 0.72); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  animation: fadein 0.2s ease;
+}
+@keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+.modal {
+  width: 100%; max-width: 420px; padding: 26px;
+  background: linear-gradient(160deg, var(--glass-strong), rgba(13, 8, 25, 0.92));
+  border: 1px solid var(--glass-border); border-radius: var(--radius);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6), 0 0 30px rgba(139, 92, 246, 0.2);
+}
+.modal h3 { margin: 0 0 8px; display: flex; align-items: center; gap: 8px; font-size: 1.15rem; }
+.modal h3 .wim-glyph { width: 1.1em; height: 1.1em; color: var(--green-neon); }
+.modal p { color: var(--muted); font-size: 0.9rem; margin: 0 0 16px; }
+.modal form { display: flex; flex-direction: column; gap: 14px; }
+.modal input { width: 100%; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
 .section-title { font-size: 1.3rem; margin: 30px 0 6px; letter-spacing: 0.02em; }
 .section-sub { color: var(--muted); margin: 0 0 16px; font-size: 0.92rem; }

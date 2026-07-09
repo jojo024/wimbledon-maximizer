@@ -5,14 +5,43 @@ for context on each item. Check items off as they ship.
 
 ## v0.2.0 — Fairness and live updates
 
-- [ ] Add `voter_id` to `ratings` with UNIQUE(combo_id, voter_id); re-rating updates (#1)
-- [ ] Signed session cookie + one-time display-name prompt; autofill author fields (#2)
-- [ ] `/ws/feed` WebSocket broadcasting combo/rating/comment events (#3)
-- [ ] Leaderboard patches cards live with a glow on change (#3)
-- [ ] Admin endpoints + UI to edit combo items, preserving the 3000-cent invariant (#4)
-- [ ] In-memory per-IP rate limiting on all POST endpoints (#5)
+- [x] Add `voter_id` to `ratings` with UNIQUE(combo_id, voter_id); re-rating updates (#1)
+- [x] Signed session cookie + one-time display-name prompt; autofill author fields (#2)
+- [x] `/ws/feed` WebSocket broadcasting combo/rating/comment events (#3)
+- [x] Leaderboard patches cards live with a glow on change (#3)
+- [x] Admin endpoints + UI to edit combo items, preserving the 3000-cent invariant (#4)
+- [x] In-memory per-IP rate limiting on all POST endpoints (#5)
 
-## v0.3.0 — Seasons and polish
+## v0.3.0 — Player leaderboard, comment quality & identity integrity
+
+- [x] Author always server-derived from session; drop free-text author/created_by fields (#1)
+- [x] Daily Deal page + `/api/deals` (one submission per day, upsert on resubmit) (#2)
+- [x] Players leaderboard: today's ranking + all-time avg-distance/streak standings (#2)
+- [x] Comment upvotes; sort by score; surface top comment on the card (#3)
+- [x] Basket Builder chips wander the arena continuously while bobbing (#4)
+- [x] W-glyph favicon on all pages (#5)
+- [x] Rebrand: W$ glyph uses a horizontal strikethrough (Won/Yen-style), not a vertical dollar stroke
+
+## Next up (v0.3.1 — polish + consolidation)
+
+- [ ] Move the basket to the side of the arena; wandering chips should treat it as an
+      obstacle (bounce off it) instead of drifting over the drop zone
+- [ ] Bump physics: the chip currently being dragged nudges nearby wandering chips out
+      of the way (impulse to their velocity, not a full physics engine)
+- [ ] **Decision needed:** Basket Builder (`/builder`, exact 30) and Daily Deal
+      (`/deals`, any total) are the same drag-a-basket interaction with only the
+      submit-time validation differing. Suggested consolidation: merge into one page
+      that always logs today's Daily Deal, and *additionally* prompts for a combo name
+      and posts to the competition leaderboard when the total lands on exactly 3000
+      cents — one build, two possible outcomes, instead of two near-duplicate pages.
+      Alternative: keep them separate but extract the now-duplicated page-level markup
+      (meter/basket-list rendering) into a shared template. Needs a decision before
+      implementing — see the design note in [ROADMAP.md](ROADMAP.md).
+- [ ] Expand the emoji picker (`static/meals.html`, `EMOJIS` array) with a much larger
+      food/drink set — currently 48 curated emojis, aim for the full Unicode
+      food-and-drink block
+
+## v0.4.0 — Seasons and polish
 
 - [ ] Season table + weekly rollover job; archive past seasons
 - [ ] Hall of fame page for past season winners
@@ -23,9 +52,21 @@ for context on each item. Check items off as they ship.
 
 ## Housekeeping
 
+- [ ] **Red-team security review** of the full app before any real deployment (session
+      cookie/HMAC handling, rate limiting bypass via proxies, admin key exposure,
+      SQL injection surface, XSS via meal/comment fields, WebSocket auth) — requested,
+      not yet run
 - [ ] pytest suite: combo total validation, admin auth, snapshot integrity, cascade deletes
 - [ ] GitHub Actions CI: syntax + import check on push
 - [ ] Change default admin key handling: warn on startup if WIM_ADMIN_KEY is unset
+
+## Done (v0.3.0)
+
+- [x] Identity lock-down, Daily Deal + Players leaderboard, comment upvotes, wandering chips, favicon
+
+## Done (v0.2.0)
+
+- [x] Server-side one-rating-per-user, session identity, live leaderboard, admin combo-item editor, rate limiting
 
 ## Done (v0.1.0)
 
