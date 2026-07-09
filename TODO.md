@@ -44,13 +44,27 @@ for context on each item. Check items off as they ship.
 
 ## Housekeeping
 
-- [ ] **Red-team security review** of the full app before any real deployment (session
-      cookie/HMAC handling, rate limiting bypass via proxies, admin key exposure,
-      SQL injection surface, XSS via meal/comment fields, WebSocket auth) — requested,
-      not yet run
+- [x] **Red-team security review** — see findings below; fixed the actionable ones
+      (admin key default had regressed to "wimbledons", non-constant-time key
+      comparison, no rate limiting on admin endpoints). SQL injection surface,
+      XSS escaping, CORS, and CSRF all came back clean.
+- [ ] Deployment-topology decisions, not yet resolved (all are only real risks if this
+      leaves a trusted LAN — see the write-up in [ROADMAP.md](ROADMAP.md)):
+      - `rate_limit()` keys off `request.client.host`, which becomes one shared bucket
+        for everyone if deployed behind a reverse proxy that isn't configured to pass
+        through the real client IP
+      - session cookie has no `secure` flag; fine over plain HTTP on a LAN, wrong if
+        ever served over HTTPS without setting it
+      - `/ws/feed` has no per-IP connection cap (each connection is unauthenticated
+        and cheap, but unbounded)
+      - `uvicorn.run(host="0.0.0.0", ...)` binds every interface, not just localhost —
+        intentional for LAN play, but combined with a default admin key means "change
+        `WIM_ADMIN_KEY` before exposing this beyond a trusted LAN" is load-bearing
+- [ ] Warn on startup if `WIM_ADMIN_KEY` is unset (still using the default)
 - [ ] pytest suite: combo total validation, admin auth, snapshot integrity, cascade deletes
 - [ ] GitHub Actions CI: syntax + import check on push
-- [ ] Change default admin key handling: warn on startup if WIM_ADMIN_KEY is unset
+- [ ] Pin exact dependency versions in requirements.txt (currently `>=`, so a future
+      install could silently pull in a breaking or vulnerable release)
 
 ## Done (v0.3.1)
 

@@ -124,6 +124,47 @@ ratings and comments, admin console, W$ glyph, purple/green futuristic theme.
 | 4 | Mobile drag polish | S | Touch drag works but chips are small; larger hit areas + haptics |
 | 5 | Docker support | S | One-command deploy on a home server |
 
+## Security review (2026-07-09)
+
+A red-team pass over the whole app, ahead of any deployment beyond a trusted LAN.
+
+**Fixed on the spot** (unambiguous, no design tradeoff):
+- The default admin key had regressed from `"wimbledon"` to `"wimbledons"` in an
+  unrelated commit — every doc still says `"wimbledon"`, so this would have locked
+  out anyone relying on the documented default. Reverted.
+- `require_admin()` compared the key with a plain `!=` (a timing side-channel);
+  switched to `hmac.compare_digest`, matching the session-cookie signature check.
+- No `/api/admin/*` endpoint was rate-limited, so the key could be brute-forced with
+  unlimited attempts/second. Added the same per-IP token bucket used elsewhere.
+
+**Came back clean:**
+- SQL injection — every query is parameterized (`?` placeholders); none build SQL
+  from string interpolation.
+- XSS — every user-supplied string (meal name/emoji, combo/author names, comments,
+  display names) goes through `esc()` before landing in `innerHTML`; verified across
+  all five pages including the just-rewritten `builder.html`.
+- CSRF — no CSRF tokens exist, but none are needed: the session cookie is
+  `SameSite=Lax`, which browsers don't attach to cross-site POST requests.
+- CORS — no `CORSMiddleware` is configured, so the browser's same-origin policy
+  applies by default; nothing loosens it.
+- Session forgery — HMAC-signed `voter_id`, checked with `hmac.compare_digest`,
+  128 bits of randomness per id. Not forgeable without the secret.
+
+**Deployment-topology risks, flagged but not fixed** (each depends on how/where this
+gets deployed, not something to silently change): `rate_limit()` trusts
+`request.client.host`, which collapses to one shared bucket for everyone behind a
+reverse proxy unless it's configured to forward the real client IP; the session
+cookie has no `secure` flag (fine on plain-HTTP LAN, wrong if ever put behind HTTPS
+without setting it); `/ws/feed` has no per-IP connection cap; and the app binds
+`0.0.0.0` by design (LAN play), which combined with a guessable default admin key
+means changing `WIM_ADMIN_KEY` before exposing this beyond a trusted LAN is
+load-bearing, not optional. Tracked in [TODO.md](TODO.md).
+
+**Verdict:** ready for its intended use case — a locally hosted game among a trusted
+group on a LAN, with the admin key changed from the default. Not hardened for
+unauthenticated exposure to the open internet without addressing the topology risks
+above first.
+
 ## Backlog (unscheduled)
 
 - Configurable target (30 Wimbledons is sacred, but a "hard mode" 50-Wimbledons bracket could be fun)
