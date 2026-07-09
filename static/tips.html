@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wimbledon$ Maximizer — Tips &amp; Tricks</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<main>
+  <h2 class="section-title">Tips &amp; Tricks</h2>
+  <p class="section-sub">Share what's helped you maximize your Wimbledons. Best tips rise to the top — upvote the ones that worked for you.</p>
+
+  <div class="panel" style="max-width:640px;margin:0 auto 24px">
+    <form id="tip-form" style="display:flex;flex-direction:column;gap:10px">
+      <textarea name="text" placeholder="Share a tip…" required maxlength="500" rows="3"></textarea>
+      <div id="identity-slot"></div>
+      <button class="btn btn-green">Post tip</button>
+    </form>
+  </div>
+
+  <div id="tip-list" style="max-width:640px;margin:0 auto"></div>
+</main>
+
+<script type="module">
+import { renderNav, api, esc, toast, getSession, ensureNamed, identityLine, connectFeed } from "/static/wim.js";
+renderNav("/tips");
+
+let tips = [];
+const listEl = document.getElementById("tip-list");
+const identitySlot = document.getElementById("identity-slot");
+
+function sortTips() {
+  tips.sort((a, b) => b.votes - a.votes || b.id - a.id);
+}
+
+function render() {
+  listEl.innerHTML = tips.length
+    ? tips.map((t, i) => `
+        <div class="comment${t.votes > 0 && i === 0 ? " top" : ""}" data-id="${t.id}">
+          <button class="cvote${t.my_vote ? " voted" : ""}" data-act="vote-tip" title="Upvote this tip">
+            &#9650;<span class="cvote-n">${t.votes}</span>
+          </button>
+          <div class="ctext"><span class="cauthor">${esc(t.author)}</span>${esc(t.text)}</div>
+        </div>`).join("")
+    : `<span class="empty-hint">No tips yet — be the first to share one.</span>`;
+}
+
+listEl.addEventListener("click", async e => {
+  const btn = e.target.closest('[data-act="vote-tip"]');
+  if (!btn) return;
+  const id = Number(btn.closest("[data-id]").dataset.id);
+  try {
+    const res = await api("POST", `/api/tips/${id}/vote`);
+    const tip = tips.find(t => t.id === id);
+    tip.votes = res.votes;
+    tip.my_vote = res.my_vote;
+    sortTips();
+    render();
+  } catch (err) { toast(err.message, true); }
+});
+
+document.getElementById("tip-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const text = e.target.text.value.trim();
+  if (!text) return;
+  const name = await ensureNamed();
+  if (!name) return;
+  try {
+    await api("POST", "/api/tips", { text });
+    e.target.text.value = "";
+    toast("Tip posted!");
+    tips = await api("GET", "/api/tips");
+    sortTips();
+    render();
+  } catch (err) { toast(err.message, true); }
+});
+
+connectFeed(ev => {
+  if (ev.type === "tip_new") {
+    if (!tips.some(t => t.id === ev.tip.id)) {
+      tips.push(ev.tip);
+      sortTips();
+      render();
+    }
+  } else if (ev.type === "tip_vote") {
+    const tip = tips.find(t => t.id === ev.tip_id);
+    if (tip) {
+      tip.votes = ev.votes;
+      sortTips();
+      render();
+    }
+  }
+});
+
+tips = await api("GET", "/api/tips");
+sortTips();
+render();
+
+const session = await getSession();
+identitySlot.innerHTML = identityLine(session.name || "not set yet");
+</script>
+</body>
+</html>

@@ -52,6 +52,27 @@ for context on each item. Check items off as they ship.
       was no longer needed)
 - [x] Basket hint icon changed to the actual "basket" emoji (was a stray mango)
 
+## v0.3.3 — Basket Builder usability
+
+- [x] Suggestions panel at the bottom of the basket: pool meals that still fit within
+      the remaining budget (won't push the total over 30), sorted priciest-first,
+      the one that would land exactly on 30 highlighted; click one to add it straight
+      to the basket, same as dragging it in
+- [x] Meal price input allowed any value (was restricted to .5 increments client-side
+      via `step="0.5"` — the server never had this restriction, it was frontend-only,
+      affecting the add-meal form and both admin price editors)
+
+## v0.3.4 — Tips board, persistent basket, credit sharing
+
+- [x] Tips & Tricks board (`/tips`): post + upvote tips, sorted by score, live-updated;
+      admin list/delete tab
+- [x] Basket Builder draft autosaves per session (`GET`/`PUT /api/basket`, scoped to
+      today), restored on load, debounced save after every change — pick up where
+      you left off and submit at the end of the day
+- [x] Cosmetic credit-share barcode: landing under 30 Wimbledons offers to generate a
+      shareable barcode from a real card number you type in — purely visual, no
+      backend storage or redemption, zero effect on scores or the leaderboard
+
 ## v0.4.0 — Seasons and polish
 
 - [ ] Season table + weekly rollover job; archive past seasons
@@ -59,6 +80,8 @@ for context on each item. Check items off as they ship.
 - [ ] Winner podium (top 3) section on the leaderboard
 - [ ] Optional meal photo upload (stored next to the DB, served statically)
 - [ ] Bigger touch targets + drop feedback for mobile drag
+- [ ] Bigger Basket Builder arena — more room for chips to wander and the basket
+      to breathe, especially once the suggestions panel is also competing for space
 - [ ] Dockerfile + docker-compose.yml
 
 ## Housekeeping
@@ -70,6 +93,14 @@ for context on each item. Check items off as they ship.
 - [x] Deployment-topology risks from the review — resolved in v0.3.2 above.
 - [ ] pytest suite: combo total validation, admin auth, snapshot integrity, cascade deletes
 - [ ] GitHub Actions CI: syntax + import check on push
+
+## Done (v0.3.4)
+
+- [x] Tips & Tricks board, persistent per-user basket draft, cosmetic credit-share barcode
+
+## Done (v0.3.3)
+
+- [x] Basket-builder "still fits" suggestions, any-price meal input (not just .5 steps)
 
 ## Done (v0.3.2)
 

@@ -26,11 +26,42 @@ export function esc(s) {
     c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
+// A deterministic, purely cosmetic "barcode" rendered from an arbitrary card
+// number — every character maps to a fixed bar-width pattern derived from its
+// char code, so the same number always draws the same bars. This is not a
+// real Code39/Code128 encoding (no external library, no network request, and
+// no scanner needs to read it back) — it's flavor for sharing a card, not a
+// functional redemption mechanism.
+export function renderBarcode(cardNumber) {
+  const clean = String(cardNumber).trim().slice(0, 30);
+  let x = 6;
+  const bars = [`<rect x="0" y="2" width="4" height="52" fill="#000"/>`];
+  x += 6;
+  for (const ch of clean) {
+    const code = ch.charCodeAt(0);
+    for (let i = 0; i < 3; i++) {
+      const w = 2 + ((code >> (i * 2)) & 3); // 2-5px, deterministic per char
+      bars.push(`<rect x="${x}" y="2" width="${w}" height="52" fill="#000"/>`);
+      x += w + 3;
+    }
+  }
+  bars.push(`<rect x="${x}" y="2" width="4" height="52" fill="#000"/>`);
+  x += 4 + 6;
+  return `<svg viewBox="0 0 ${x} 72" width="100%" height="100" xmlns="http://www.w3.org/2000/svg"
+    role="img" aria-label="Barcode for card ${esc(clean)}">
+    <rect x="0" y="0" width="${x}" height="72" fill="#fff"/>
+    ${bars.join("")}
+    <text x="${x / 2}" y="68" font-size="11" text-anchor="middle" fill="#000"
+      font-family="monospace" letter-spacing="1">${esc(clean)}</text>
+  </svg>`;
+}
+
 export function renderNav(active) {
   const links = [
     ["/", "Leaderboard"],
     ["/builder", "Basket Builder"],
     ["/players", "Players"],
+    ["/tips", "Tips & Tricks"],
     ["/meals", "Add Meals"],
     ["/admin", "Admin"],
   ];

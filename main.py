@@ -144,6 +144,24 @@ def init_db():
             price_cents INTEGER NOT NULL,
             qty INTEGER NOT NULL CHECK(qty > 0)
         );
+        CREATE TABLE IF NOT EXISTS tips(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            author TEXT NOT NULL,
+            text TEXT NOT NULL,
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS tip_votes(
+            tip_id INTEGER NOT NULL REFERENCES tips(id) ON DELETE CASCADE,
+            voter_id TEXT NOT NULL,
+            PRIMARY KEY (tip_id, voter_id)
+        );
+        CREATE TABLE IF NOT EXISTS basket_drafts(
+            voter_id TEXT NOT NULL,
+            basket_date TEXT NOT NULL,
+            meal_id INTEGER NOT NULL REFERENCES meals(id) ON DELETE CASCADE,
+            qty INTEGER NOT NULL CHECK(qty > 0),
+            PRIMARY KEY (voter_id, basket_date, meal_id)
+        );
         """)
         # Migrate pre-0.2.0 ratings tables that lack voter_id.
         cols = [r[1] for r in conn.execute("PRAGMA table_info(ratings)").fetchall()]
@@ -365,6 +383,19 @@ class NameIn(BaseModel):
     name: str = Field(min_length=1, max_length=40)
 
 
+class TipIn(BaseModel):
+    text: str = Field(min_length=1, max_length=500)
+
+
+class BasketItemIn(BaseModel):
+    meal_id: int
+    qty: int = Field(ge=1, le=20)
+
+
+class BasketIn(BaseModel):
+    items: list[BasketItemIn] = Field(default_factory=list)  # empty list clears the draft
+
+
 # ---------- serialization ----------
 
 def serialize_combo(conn, c, voter_id: str | None = None) -> dict:
@@ -432,6 +463,11 @@ def page_meals():
 @app.get("/players")
 def page_players():
     return FileResponse(STATIC / "players.html")
+
+
+@app.get("/tips")
+def page_tips():
+    return FileResponse(STATIC / "tips.html")
 
 
 @app.get("/admin")
@@ -593,6 +629,55 @@ def vote_comment(comment_id: int, voter_id: str = Depends(get_voter)):
     return {"votes": votes, "my_vote": my_vote}
 
 
+@app.get("/api/tips")
+def get_tips(voter_id: str = Depends(get_voter)):
+    with db() as conn:
+        rows = conn.execute(
+            "SELECT t.id, t.author, t.text, t.created_at,"
+            " COUNT(v.voter_id) AS votes,"
+            " MAX(CASE WHEN v.voter_id=? THEN 1 ELSE 0 END) AS my_vote"
+            " FROM tips t LEFT JOIN tip_votes v ON v.tip_id = t.id"
+            " GROUP BY t.id ORDER BY votes DESC, t.id DESC",
+            (voter_id,)).fetchall()
+    return [{**dict(r), "my_vote": bool(r["my_vote"])} for r in rows]
+
+
+@app.post("/api/tips", status_code=201, dependencies=[Depends(rate_limit)])
+def add_tip(tip: TipIn, voter_id: str = Depends(get_voter)):
+    with db() as conn:
+        author = require_named(conn, voter_id)
+        cur = conn.execute(
+            "INSERT INTO tips(author, text) VALUES (?,?)", (author, tip.text.strip()))
+        tip_id = cur.lastrowid
+        row = conn.execute(
+            "SELECT id, author, text, created_at FROM tips WHERE id=?", (tip_id,)).fetchone()
+    payload = {**dict(row), "votes": 0, "my_vote": False}
+    notify({"type": "tip_new", "tip": payload})
+    return {"id": tip_id}
+
+
+@app.post("/api/tips/{tip_id}/vote", dependencies=[Depends(rate_limit)])
+def vote_tip(tip_id: int, voter_id: str = Depends(get_voter)):
+    with db() as conn:
+        if not conn.execute("SELECT 1 FROM tips WHERE id=?", (tip_id,)).fetchone():
+            raise HTTPException(404, "Tip not found")
+        existing = conn.execute(
+            "SELECT 1 FROM tip_votes WHERE tip_id=? AND voter_id=?",
+            (tip_id, voter_id)).fetchone()
+        if existing:
+            conn.execute(
+                "DELETE FROM tip_votes WHERE tip_id=? AND voter_id=?", (tip_id, voter_id))
+            my_vote = False
+        else:
+            conn.execute(
+                "INSERT INTO tip_votes(tip_id, voter_id) VALUES (?,?)", (tip_id, voter_id))
+            my_vote = True
+        votes = conn.execute(
+            "SELECT COUNT(*) FROM tip_votes WHERE tip_id=?", (tip_id,)).fetchone()[0]
+    notify({"type": "tip_vote", "tip_id": tip_id, "votes": votes})
+    return {"votes": votes, "my_vote": my_vote}
+
+
 def deal_distance(total_cents: int) -> int:
     return abs(total_cents - TARGET_CENTS)
 
@@ -681,6 +766,31 @@ def deals_leaderboard():
         })
     results.sort(key=lambda r: r["avg_distance_cents"])
     return results
+
+
+@app.get("/api/basket")
+def get_basket(voter_id: str = Depends(get_voter)):
+    """Today's in-progress basket for the caller — autosaved from the Basket
+    Builder so it can be picked up on any device/visit and submitted later."""
+    today = date.today().isoformat()
+    with db() as conn:
+        rows = conn.execute(
+            "SELECT b.meal_id, b.qty FROM basket_drafts b JOIN meals m ON m.id = b.meal_id"
+            " WHERE b.voter_id=? AND b.basket_date=?", (voter_id, today)).fetchall()
+    return {"date": today, "items": [dict(r) for r in rows]}
+
+
+@app.put("/api/basket", dependencies=[Depends(rate_limit)])
+def save_basket(payload: BasketIn, voter_id: str = Depends(get_voter)):
+    today = date.today().isoformat()
+    with db() as conn:
+        conn.execute(
+            "DELETE FROM basket_drafts WHERE voter_id=? AND basket_date=?", (voter_id, today))
+        if payload.items:
+            conn.executemany(
+                "INSERT INTO basket_drafts(voter_id, basket_date, meal_id, qty) VALUES (?,?,?,?)",
+                [(voter_id, today, i.meal_id, i.qty) for i in payload.items])
+    return {"ok": True}
 
 
 @app.websocket("/ws/feed")
@@ -840,6 +950,27 @@ def admin_delete_comment(comment_id: int, x_admin_key: str | None = Header(defau
             "SELECT COUNT(*) FROM comments WHERE combo_id=?", (combo_id,)).fetchone()[0]
         tc = top_comment(conn, combo_id)
     notify({"type": "comment", "combo_id": combo_id, "comment_count": n, "top_comment": tc})
+    return {"ok": True}
+
+
+@app.get("/api/admin/tips", dependencies=[Depends(rate_limit)])
+def admin_all_tips(x_admin_key: str | None = Header(default=None)):
+    require_admin(x_admin_key)
+    with db() as conn:
+        rows = conn.execute(
+            "SELECT t.id, t.author, t.text, t.created_at, COUNT(v.voter_id) AS votes"
+            " FROM tips t LEFT JOIN tip_votes v ON v.tip_id = t.id"
+            " GROUP BY t.id ORDER BY t.id DESC").fetchall()
+    return [dict(r) for r in rows]
+
+
+@app.delete("/api/admin/tips/{tip_id}", dependencies=[Depends(rate_limit)])
+def admin_delete_tip(tip_id: int, x_admin_key: str | None = Header(default=None)):
+    require_admin(x_admin_key)
+    with db() as conn:
+        cur = conn.execute("DELETE FROM tips WHERE id=?", (tip_id,))
+        if cur.rowcount == 0:
+            raise HTTPException(404, "Tip not found")
     return {"ok": True}
 
 

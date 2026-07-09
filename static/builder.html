@@ -40,13 +40,26 @@
         <div id="identity-slot"></div>
         <button class="btn btn-green" id="submit-btn" disabled>Add something to your basket</button>
       </form>
+
+      <div id="suggestions" class="suggestions"></div>
     </div>
+  </div>
+
+  <div class="panel" id="credit-share" style="display:none;max-width:480px;margin:24px auto 0">
+    <h3 style="margin:0 0 4px">Share your card</h3>
+    <p class="section-sub" id="credit-share-msg" style="margin-bottom:14px"></p>
+    <form id="credit-share-form" style="display:flex;gap:8px;margin-bottom:14px">
+      <input name="cardnum" placeholder="Card number" maxlength="30" style="flex:1" required>
+      <button class="btn btn-sm btn-green" type="submit">Generate barcode</button>
+    </form>
+    <div id="barcode-out"></div>
+    <a href="/players" class="btn btn-sm" style="margin-top:16px;display:inline-block">Continue to Players &rarr;</a>
   </div>
 </main>
 
 <script type="module">
 import { renderNav, api, esc, wim, fmtW, toast, getSession, ensureNamed,
-         identityLine, initFloatingBasket } from "/static/wim.js";
+         identityLine, initFloatingBasket, renderBarcode } from "/static/wim.js";
 renderNav("/builder");
 
 const TARGET = 3000;
@@ -62,6 +75,7 @@ const submitBtn = document.getElementById("submit-btn");
 const identitySlot = document.getElementById("identity-slot");
 const nameInput = document.querySelector('#submit-form [name=name]');
 const nameHint = document.getElementById("name-hint");
+const suggestBox = document.getElementById("suggestions");
 
 let meals = [];
 const basket = new Map(); // meal_id -> qty
@@ -111,7 +125,50 @@ function renderBasket() {
   submitBtn.textContent = basket.size === 0
     ? "Add something to your basket"
     : exact ? "Enter competition + log today's deal" : "Log today's deal";
+
+  renderSuggestions(t);
+  scheduleSaveBasket();
 }
+
+// Autosaves the in-progress basket server-side (per session, per day) so it
+// can be picked up later — on this device or any other — and submitted at
+// the end of the day. Debounced so rapid +/- clicks don't spam the network.
+let saveTimer = null;
+function scheduleSaveBasket() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    const items = [...basket].map(([meal_id, qty]) => ({ meal_id, qty }));
+    try { await api("PUT", "/api/basket", { items }); } catch { /* best-effort */ }
+  }, 500);
+}
+
+// Meals from the pool that would still fit without going over 30 Wimbledons —
+// click one to add it straight to the basket, same as dragging it in.
+function renderSuggestions(t) {
+  const remaining = TARGET - t;
+  if (remaining <= 0) { suggestBox.innerHTML = ""; return; }
+  const fits = meals
+    .filter(m => m.price_cents <= remaining)
+    .sort((a, b) => b.price_cents - a.price_cents);
+  if (fits.length === 0) {
+    suggestBox.innerHTML = `<div class="suggest-label">Still fits (${fmtW(remaining)} Wimbledons left)</div>
+      <span class="empty-hint">Nothing in the pool fits in what's left.</span>`;
+    return;
+  }
+  suggestBox.innerHTML = `
+    <div class="suggest-label">Still fits (${fmtW(remaining)} Wimbledons left)</div>
+    <div class="suggest-chips">
+      ${fits.map(m => `<button type="button" class="suggest-chip${m.price_cents === remaining ? " perfect" : ""}" data-id="${m.id}">
+        <span class="emoji">${esc(m.emoji)}</span>${esc(m.name)} ${wim(m.price_cents)}
+      </button>`).join("")}
+    </div>`;
+}
+
+suggestBox.addEventListener("click", e => {
+  const chip = e.target.closest(".suggest-chip");
+  if (!chip) return;
+  addToBasket(Number(chip.dataset.id));
+});
 
 listEl.addEventListener("click", e => {
   const btn = e.target.closest(".qbtn");
@@ -148,6 +205,12 @@ document.getElementById("submit-form").addEventListener("submit", async e => {
       await api("POST", "/api/combos", { name: e.target.name.value.trim(), items });
       toast("Exactly 30! Entered the competition and logged today's deal.");
       setTimeout(() => location.href = "/", 1400);
+    } else if (total() < TARGET) {
+      // Credit left on the card — offer to share it (cosmetic: a barcode
+      // generated from a real card number, purely for sharing; it doesn't
+      // touch anyone's total or leaderboard standing).
+      toast(`Deal logged — W$${(deal.distance_cents / 100).toFixed(2)} away from 30.`);
+      showCreditShare(deal.distance_cents);
     } else {
       toast(`Deal logged — W$${(deal.distance_cents / 100).toFixed(2)} away from 30.`);
       setTimeout(() => location.href = "/players", 1400);
@@ -155,7 +218,26 @@ document.getElementById("submit-form").addEventListener("submit", async e => {
   } catch (err) { toast(err.message, true); }
 });
 
+const creditShareBox = document.getElementById("credit-share");
+function showCreditShare(leftoverCents) {
+  document.getElementById("credit-share-msg").textContent =
+    `You had ${fmtW(leftoverCents)} Wimbledons left on your card today — ` +
+    `enter its number to generate a barcode you can share so someone else can stock up.`;
+  document.getElementById("barcode-out").innerHTML = "";
+  creditShareBox.style.display = "block";
+  creditShareBox.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+document.getElementById("credit-share-form").addEventListener("submit", e => {
+  e.preventDefault();
+  const num = e.target.cardnum.value.trim();
+  if (!num) return;
+  document.getElementById("barcode-out").innerHTML = renderBarcode(num);
+});
+
 meals = await api("GET", "/api/meals");
+const draft = await api("GET", "/api/basket");
+for (const item of draft.items) basket.set(item.meal_id, item.qty);
 initFloatingBasket({ arena, basketEl, meals, onDrop: addToBasket });
 renderBasket();
 

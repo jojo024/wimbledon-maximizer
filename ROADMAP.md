@@ -159,6 +159,57 @@ ratings and comments, admin console, W$ glyph, purple/green futuristic theme.
 
 > **Status:** Shipped.
 
+## v0.3.3 — Basket Builder usability
+
+| # | Item | Effort | Why now |
+|---|------|--------|---------|
+| 1 | "Still fits" suggestions panel | S | Building toward exactly 30 by trial-and-error dragging was tedious; surface what's actually still possible |
+| 2 | Meal prices accept any value | XS | The add-meal/admin price inputs had `step="0.5"`, a client-side artifact the server never required |
+
+### Item details
+
+1. **Suggestions** — `static/builder.html` (`renderSuggestions`). Pool meals priced at
+   or under the remaining budget, sorted priciest-first so the "best" completions
+   surface first; the one that lands exactly on 30 gets a highlighted "perfect" state.
+   Clicking a suggestion calls the same `addToBasket()` path as a drag-drop.
+2. **Any-price meals** — `static/meals.html`, `static/admin.html`: `step="0.5"` →
+   `step="0.01"` on all three price inputs (add-meal form, admin meal row, admin combo
+   item editor). `MealIn.price` already accepted any float server-side — this was
+   purely a frontend restriction nobody asked for.
+
+> **Status:** Shipped.
+
+## v0.3.4 — Tips board, persistent basket, credit sharing
+
+| # | Item | Effort | Why now |
+|---|------|--------|---------|
+| 1 | Tips & Tricks board | M | Users want to share advice on maximizing Wimbledons, with the best tips surfaced by community upvote — same pattern as comment voting |
+| 2 | Basket Builder draft autosaves per user | M | Building a basket throughout the day (adding meals as you eat them) shouldn't be lost by closing the tab; submit at day's end |
+| 3 | Cosmetic credit-share barcode | S | Landing under 30 leaves "credit on the card"; a fun, shareable barcode for it — deliberately not a functional transfer, to protect leaderboard integrity |
+
+### Item details
+
+1. **Tips board** — `main.py` (`tips`/`tip_votes` tables, `GET`/`POST /api/tips`,
+   `POST /api/tips/{id}/vote`, admin list/delete), `static/tips.html` (new page,
+   reuses the `.comment`/`.cvote` styling from comment voting rather than introducing
+   parallel CSS), `static/wim.js` (nav link). Same identity rules as everywhere else:
+   author from session, one upvote per person, live-patched over `/ws/feed`
+   (`tip_new`/`tip_vote`).
+2. **Basket draft** — `main.py` (`basket_drafts` table, keyed `(voter_id, basket_date,
+   meal_id)`; `GET`/`PUT /api/basket` scoped to today), `static/builder.html` (restores
+   the draft into the basket `Map` on load, autosaves debounced 500ms after every
+   change). Unlike `combo_items`/`daily_deal_items`, this isn't a historical snapshot —
+   it references live `meal_id`s and is meant to always reflect the current pool, since
+   it's a draft of something not yet finalized.
+3. **Credit-share barcode** — `static/wim.js` (`renderBarcode()`: a deterministic bar
+   pattern derived from the input string's char codes, not a real Code39/Code128
+   encoding), `static/builder.html` (shown instead of the immediate redirect when a
+   Daily Deal lands under 30; a "Continue to Players" link replaces the auto-redirect).
+   Explicitly not wired to any backend — no storage, no redemption, no effect on
+   scores, by design (see Design decisions in README).
+
+> **Status:** Shipped.
+
 ## v0.4.0 — Seasons and polish
 
 | # | Item | Effort | Why now |
