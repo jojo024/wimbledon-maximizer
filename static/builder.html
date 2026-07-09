@@ -10,7 +10,9 @@
 <body>
 <main>
   <h2 class="section-title">Basket Builder</h2>
-  <p class="section-sub">Drag floating meals into the basket. Hit <strong>exactly 30 Wimbledons</strong> to unlock the competition entry.</p>
+  <p class="section-sub">Drag floating meals into the basket. Any total logs today's
+    <strong>Daily Deal</strong> — see how you rank on <a href="/players" style="color:var(--green-neon)">Players</a>.
+    Land on <strong>exactly 30 Wimbledons</strong> and it also enters the competition leaderboard.</p>
 
   <div class="builder-layout" style="display:grid;grid-template-columns:1.6fr 1fr;gap:24px;align-items:start">
     <div class="arena" id="arena">
@@ -32,11 +34,11 @@
       <div class="basket-list" id="basket-list"></div>
 
       <form id="submit-form" style="display:flex;flex-direction:column;gap:10px;margin-top:16px">
-        <label class="f">Combo name
-          <input name="name" placeholder="e.g. Midnight Ramen Run" required maxlength="60">
+        <label class="f" id="name-field">Combo name <span id="name-hint" class="empty-hint"></span>
+          <input name="name" placeholder="e.g. Midnight Ramen Run" maxlength="60">
         </label>
         <div id="identity-slot"></div>
-        <button class="btn btn-green" id="submit-btn" disabled>Enter the competition</button>
+        <button class="btn btn-green" id="submit-btn" disabled>Add something to your basket</button>
       </form>
     </div>
   </div>
@@ -48,6 +50,7 @@ import { renderNav, api, esc, wim, fmtW, toast, getSession, ensureNamed,
 renderNav("/builder");
 
 const TARGET = 3000;
+const VIS_CAP = TARGET * 2; // meter bar visualizes up to 60 Wimbledons
 const arena = document.getElementById("arena");
 const basketEl = document.getElementById("basket");
 const listEl = document.getElementById("basket-list");
@@ -57,6 +60,8 @@ const totalLabel = document.getElementById("total-label");
 const statusLabel = document.getElementById("status-label");
 const submitBtn = document.getElementById("submit-btn");
 const identitySlot = document.getElementById("identity-slot");
+const nameInput = document.querySelector('#submit-form [name=name]');
+const nameHint = document.getElementById("name-hint");
 
 let meals = [];
 const basket = new Map(); // meal_id -> qty
@@ -69,6 +74,7 @@ function total() {
 
 function renderBasket() {
   const t = total();
+  const exact = t === TARGET;
   listEl.innerHTML = basket.size === 0
     ? `<span class="empty-hint">Basket is empty — drag something in.</span>`
     : [...basket].map(([id, qty]) => {
@@ -85,19 +91,26 @@ function renderBasket() {
         </div>`;
       }).join("");
 
-  const pct = Math.min(t / TARGET, 1) * 100;
+  const pct = Math.min(t / VIS_CAP, 1) * 100;
   fillEl.style.width = pct + "%";
-  meterEl.classList.toggle("exact", t === TARGET);
-  meterEl.classList.toggle("over", t > TARGET);
-  totalLabel.innerHTML = `${wim(t)} / ${wim(TARGET)} Wimbledons`;
-  if (t === TARGET) {
-    statusLabel.innerHTML = `<span class="exact-txt">EXACTLY 30 WIMBLEDONS!</span>`;
+  meterEl.classList.toggle("exact", exact);
+  totalLabel.innerHTML = `${wim(t)} today`;
+  if (exact) {
+    statusLabel.innerHTML = `<span class="exact-txt">EXACTLY 30 — enters the competition too!</span>`;
   } else if (t > TARGET) {
-    statusLabel.innerHTML = `<span class="over-txt">${fmtW(t - TARGET)} Wimbledons over</span>`;
+    statusLabel.innerHTML = `${fmtW(t - TARGET)} Wimbledons over 30`;
+  } else if (t > 0) {
+    statusLabel.innerHTML = `${fmtW(TARGET - t)} Wimbledons under 30`;
   } else {
-    statusLabel.innerHTML = `${fmtW(TARGET - t)} Wimbledons to go`;
+    statusLabel.innerHTML = "";
   }
-  submitBtn.disabled = t !== TARGET;
+
+  nameInput.required = exact;
+  nameHint.textContent = exact ? "" : "(only used if you hit exactly 30)";
+  submitBtn.disabled = basket.size === 0;
+  submitBtn.textContent = basket.size === 0
+    ? "Add something to your basket"
+    : exact ? "Enter competition + log today's deal" : "Log today's deal";
 }
 
 listEl.addEventListener("click", e => {
@@ -119,17 +132,26 @@ function addToBasket(id) {
 }
 
 // --- submit ---
+// Always logs today's Daily Deal (any total). If the basket lands on exactly
+// 30 Wimbledons, it *also* posts a named Combo to the competition leaderboard.
 
 document.getElementById("submit-form").addEventListener("submit", async e => {
   e.preventDefault();
-  if (total() !== TARGET) return;
+  if (basket.size === 0) return;
   const name = await ensureNamed();
   if (!name) return;
   const items = [...basket].map(([meal_id, qty]) => ({ meal_id, qty }));
+  const exact = total() === TARGET;
   try {
-    await api("POST", "/api/combos", { name: e.target.name.value.trim(), items });
-    toast("Combo entered! Redirecting to the leaderboard…");
-    setTimeout(() => location.href = "/", 1400);
+    const deal = await api("POST", "/api/deals", { items });
+    if (exact) {
+      await api("POST", "/api/combos", { name: e.target.name.value.trim(), items });
+      toast("Exactly 30! Entered the competition and logged today's deal.");
+      setTimeout(() => location.href = "/", 1400);
+    } else {
+      toast(`Deal logged — W$${(deal.distance_cents / 100).toFixed(2)} away from 30.`);
+      setTimeout(() => location.href = "/players", 1400);
+    }
   } catch (err) { toast(err.message, true); }
 });
 

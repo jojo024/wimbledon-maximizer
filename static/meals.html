@@ -42,10 +42,28 @@ import { renderNav, api, esc, fmtW, toast, getSession, ensureNamed,
          identityLine, wireIdentityChange } from "/static/wim.js";
 renderNav("/meals");
 
+// The full Unicode food & drink block (plus common extensions), not just a
+// curated slice — every real meal should be one tap away from a matching emoji.
 const EMOJIS = [
-  "🥐","☕","🍜","🍣","🍕","🥗","🧋","🍔","🍎","🍩","🍓","🌮","🥑","🍦","🍟","🍇",
-  "🍪","🥞","🍙","🍛","🍝","🌯","🥪","🍗","🥩","🍤","🥟","🍚","🍞","🧀","🥚","🥓",
-  "🍅","🥕","🌽","🥦","🍌","🍊","🍉","🥭","🍑","🍒","🥤","🍺","🍷","🍰","🧁","🍫",
+  // fruit
+  "🍇","🍈","🍉","🍊","🍋","🍌","🍍","🥭","🍎","🍏","🍐","🍑","🍒","🍓","🫐","🥝",
+  // vegetables
+  "🍅","🫒","🥥","🥑","🍆","🥔","🥕","🌽","🌶️","🫑","🥒","🥬","🥦","🧄","🧅","🍄","🫘","🌰","🫛",
+  // bread / bakery
+  "🍞","🥐","🥖","🫓","🥨","🥯","🥞","🧇",
+  // dairy
+  "🧀","🥛","🍼","🧈",
+  // meat / protein / eggs
+  "🥓","🥩","🍗","🍖","🌭","🍔","🍟","🍕","🫔","🥪","🥙","🧆","🌮","🌯","🫕","🥚","🍳",
+  // rice, noodles, soups & Asian staples
+  "🥘","🍲","🥣","🍿","🧂","🥫","🍱","🍘","🍙","🍚","🍛","🍜","🍝","🍠","🍢","🍣","🍤","🍥","🥮","🍡","🥟","🥠","🥡",
+  "🥗",
+  // sweets & desserts
+  "🍦","🍧","🍨","🍩","🍪","🎂","🍰","🧁","🥧","🍫","🍬","🍭","🍮","🍯",
+  // drinks
+  "☕","🍵","🧃","🥤","🧋","🍶","🍺","🍻","🥂","🍷","🥃","🍸","🍹","🧉","🍾","🫖",
+  // utensils
+  "🥄","🍴","🍽️","🥢","🧊",
 ];
 
 const grid = document.getElementById("emoji-grid");

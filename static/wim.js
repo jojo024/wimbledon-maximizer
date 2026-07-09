@@ -30,7 +30,6 @@ export function renderNav(active) {
   const links = [
     ["/", "Leaderboard"],
     ["/builder", "Basket Builder"],
-    ["/deals", "Daily Deal"],
     ["/players", "Players"],
     ["/meals", "Add Meals"],
     ["/admin", "Admin"],
@@ -176,13 +175,17 @@ export function wireIdentityChange(root, onChanged) {
 
 // Scatters `meals` as draggable chips inside `arena`; dropping one on `basketEl`
 // calls onDrop(mealId). Chips continuously wander the arena (bouncing off its
-// edges, screensaver-style) while also bobbing via the .float-chip CSS
-// animation — two independent motions on nested elements (wrap moves, inner
-// chip bobs) so their `transform`s don't fight each other or the drag gesture.
+// edges and off the basket itself, screensaver-style) while also bobbing via
+// the .float-chip CSS animation — two independent motions on nested elements
+// (wrap moves, inner chip bobs) so their `transform`s don't fight each other
+// or the drag gesture. The chip being dragged bumps nearby wanderers aside.
 export function initFloatingBasket({ arena, basketEl, meals, onDrop }) {
   arena.querySelectorAll(".chip-wrap").forEach(el => el.remove());
   const wanderers = [];
+  const CHIP_W = 100, CHIP_H = 78;
 
+  // The basket now docks to one side (see .basket in style.css); chips spawn
+  // and wander clear of it rather than orbiting its old dead-center position.
   meals.forEach((m, i) => {
     const wrap = document.createElement("div");
     wrap.className = "chip-wrap";
@@ -198,14 +201,14 @@ export function initFloatingBasket({ arena, basketEl, meals, onDrop }) {
     arena.appendChild(wrap);
 
     const w = arena.clientWidth, h = arena.clientHeight;
-    const cx = w / 2, cy = h / 2;
+    const cx = w * 0.38, cy = h / 2; // rings centered left-of-basket, not dead-center
     const ring = i % 2;
     const count = Math.ceil(meals.length / 2);
     const angle = ((Math.floor(i / 2) / count) * 2 * Math.PI) + ring * 0.5 + (i % 3) * 0.15;
-    const rx = (ring ? 0.44 : 0.31) * w;
+    const rx = (ring ? 0.34 : 0.24) * w;
     const ry = (ring ? 0.40 : 0.27) * h;
-    const x = Math.min(Math.max(cx + Math.cos(angle) * rx - 45, 4), w - 100);
-    const y = Math.min(Math.max(cy + Math.sin(angle) * ry - 34, 4), h - 78);
+    const x = Math.min(Math.max(cx + Math.cos(angle) * rx - 45, 4), w - CHIP_W);
+    const y = Math.min(Math.max(cy + Math.sin(angle) * ry - 34, 4), h - CHIP_H);
     wrap.style.left = `${x}px`;
     wrap.style.top = `${y}px`;
 
@@ -216,13 +219,23 @@ export function initFloatingBasket({ arena, basketEl, meals, onDrop }) {
     });
   });
 
+  // Basket's box in arena-relative coordinates, padded — treated as a wall.
+  function basketZone(pad = 16) {
+    return {
+      left: basketEl.offsetLeft - pad, top: basketEl.offsetTop - pad,
+      right: basketEl.offsetLeft + basketEl.offsetWidth + pad,
+      bottom: basketEl.offsetTop + basketEl.offsetHeight + pad,
+    };
+  }
+
   let lastT = null;
   function tick(t) {
     if (lastT == null) lastT = t;
     const dt = Math.min((t - lastT) / 1000, 0.05); // clamp so a stalled tab doesn't teleport chips
     lastT = t;
     const w = arena.clientWidth, h = arena.clientHeight;
-    const maxX = w - 100, maxY = h - 78;
+    const maxX = w - CHIP_W, maxY = h - CHIP_H;
+    const bz = basketZone();
     for (const p of wanderers) {
       if (p.dragging) continue;
       p.x += p.vx * dt;
@@ -231,6 +244,17 @@ export function initFloatingBasket({ arena, basketEl, meals, onDrop }) {
       if (p.x > maxX) { p.x = maxX; p.vx = -Math.abs(p.vx); }
       if (p.y < 4) { p.y = 4; p.vy = Math.abs(p.vy); }
       if (p.y > maxY) { p.y = maxY; p.vy = -Math.abs(p.vy); }
+      // Bounce off the basket like a wall: push out along whichever edge is
+      // closest, so the drop zone stays clear instead of getting drifted over.
+      if (p.x < bz.right && p.x + CHIP_W > bz.left && p.y < bz.bottom && p.y + CHIP_H > bz.top) {
+        const penLeft = (p.x + CHIP_W) - bz.left, penRight = bz.right - p.x;
+        const penTop = (p.y + CHIP_H) - bz.top, penBottom = bz.bottom - p.y;
+        const minPen = Math.min(penLeft, penRight, penTop, penBottom);
+        if (minPen === penLeft) { p.x = bz.left - CHIP_W; p.vx = -Math.abs(p.vx); }
+        else if (minPen === penRight) { p.x = bz.right; p.vx = Math.abs(p.vx); }
+        else if (minPen === penTop) { p.y = bz.top - CHIP_H; p.vy = -Math.abs(p.vy); }
+        else { p.y = bz.bottom; p.vy = Math.abs(p.vy); }
+      }
       p.el.style.left = `${p.x}px`;
       p.el.style.top = `${p.y}px`;
     }
@@ -268,6 +292,26 @@ export function initFloatingBasket({ arena, basketEl, meals, onDrop }) {
     const b = basketEl.getBoundingClientRect();
     const over = e.clientX > b.left && e.clientX < b.right && e.clientY > b.top && e.clientY < b.bottom;
     basketEl.classList.toggle("hot", over);
+
+    // Bump nearby wanderers away from the dragged chip's current position —
+    // an impulse to their velocity; the tick loop above carries it forward.
+    const dragRect = drag.chip.getBoundingClientRect();
+    const dcx = dragRect.left + dragRect.width / 2, dcy = dragRect.top + dragRect.height / 2;
+    const BUMP_RADIUS = 75, BUMP_FORCE = 70, MAX_SPEED = 160;
+    for (const p of wanderers) {
+      if (p === drag.wanderer || p.dragging) continue;
+      const r = p.el.getBoundingClientRect();
+      const pcx = r.left + r.width / 2, pcy = r.top + r.height / 2;
+      const dx = pcx - dcx, dy = pcy - dcy;
+      const dist = Math.hypot(dx, dy);
+      if (dist > 0.01 && dist < BUMP_RADIUS) {
+        const force = (1 - dist / BUMP_RADIUS) * BUMP_FORCE;
+        p.vx += (dx / dist) * force;
+        p.vy += (dy / dist) * force;
+        const sp = Math.hypot(p.vx, p.vy);
+        if (sp > MAX_SPEED) { p.vx = (p.vx / sp) * MAX_SPEED; p.vy = (p.vy / sp) * MAX_SPEED; }
+      }
+    }
   });
 
   arena.addEventListener("pointerup", e => {

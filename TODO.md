@@ -22,24 +22,16 @@ for context on each item. Check items off as they ship.
 - [x] W-glyph favicon on all pages (#5)
 - [x] Rebrand: W$ glyph uses a horizontal strikethrough (Won/Yen-style), not a vertical dollar stroke
 
-## Next up (v0.3.1 — polish + consolidation)
+## v0.3.1 — Arena polish & consolidation
 
-- [ ] Move the basket to the side of the arena; wandering chips should treat it as an
-      obstacle (bounce off it) instead of drifting over the drop zone
-- [ ] Bump physics: the chip currently being dragged nudges nearby wandering chips out
+- [x] Move the basket to the side of the arena; wandering chips treat it as an obstacle
+      (bounce off it) instead of drifting over the drop zone
+- [x] Bump physics: the chip currently being dragged nudges nearby wandering chips out
       of the way (impulse to their velocity, not a full physics engine)
-- [ ] **Decision needed:** Basket Builder (`/builder`, exact 30) and Daily Deal
-      (`/deals`, any total) are the same drag-a-basket interaction with only the
-      submit-time validation differing. Suggested consolidation: merge into one page
-      that always logs today's Daily Deal, and *additionally* prompts for a combo name
-      and posts to the competition leaderboard when the total lands on exactly 3000
-      cents — one build, two possible outcomes, instead of two near-duplicate pages.
-      Alternative: keep them separate but extract the now-duplicated page-level markup
-      (meter/basket-list rendering) into a shared template. Needs a decision before
-      implementing — see the design note in [ROADMAP.md](ROADMAP.md).
-- [ ] Expand the emoji picker (`static/meals.html`, `EMOJIS` array) with a much larger
-      food/drink set — currently 48 curated emojis, aim for the full Unicode
-      food-and-drink block
+- [x] Consolidate Basket Builder + Daily Deal into one page (`/builder`): always logs
+      today's Daily Deal, additionally posts a Combo when the total is exactly 3000
+      cents; `/deals` page removed, `/api/deals/*` endpoints unchanged
+- [x] Expand the emoji picker (`static/meals.html`, `EMOJIS` array) to ~120 food/drink emojis
 
 ## v0.4.0 — Seasons and polish
 
@@ -59,6 +51,10 @@ for context on each item. Check items off as they ship.
 - [ ] pytest suite: combo total validation, admin auth, snapshot integrity, cascade deletes
 - [ ] GitHub Actions CI: syntax + import check on push
 - [ ] Change default admin key handling: warn on startup if WIM_ADMIN_KEY is unset
+
+## Done (v0.3.1)
+
+- [x] Arena obstacle-avoidance + bump physics, Basket Builder/Daily Deal consolidation, larger emoji picker
 
 ## Done (v0.3.0)
 

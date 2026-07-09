@@ -83,38 +83,36 @@ ratings and comments, admin console, W$ glyph, purple/green futuristic theme.
 
 > **Status:** Shipped.
 
-## v0.3.1 — Arena polish & consolidation (planned, not yet built)
+## v0.3.1 — Arena polish & consolidation
 
 | # | Item | Effort | Why now |
 |---|------|--------|---------|
-| 1 | Move the basket to the side of the arena | XS | Wandering chips currently drift across the drop zone and visually block it |
+| 1 | Move the basket to the side of the arena | XS | Wandering chips drifted across the drop zone and visually blocked it |
 | 2 | Wandering chips treat the basket as an obstacle | S | Repositioning alone doesn't stop chips drifting back over it; needs a bounce rule, not just a new resting position |
-| 3 | Bump physics while dragging | S | The chip under your cursor should nudge others out of the way — fun, and reinforces that the arena is "alive" |
-| 4 | Expand the emoji picker | XS | 48 curated emojis is a small slice of the Unicode food/drink block |
-| 5 | **Decide:** consolidate Basket Builder + Daily Deal | M | They're the same drag-a-basket interaction; only the submit-time validation differs |
+| 3 | Bump physics while dragging | S | The chip under your cursor nudges others out of the way — fun, and reinforces that the arena is "alive" |
+| 4 | Expand the emoji picker | XS | 48 curated emojis was a small slice of the Unicode food/drink block |
+| 5 | Consolidate Basket Builder + Daily Deal into one page | M | They were the same drag-a-basket interaction; only the submit-time validation differed |
 
-### Design note: consolidating Basket Builder and Daily Deal
+### Item details
 
-Both `/builder` and `/deals` scatter the same meal pool into the same arena and differ
-only in what happens at submit time: `/builder` requires exactly 3000 cents and posts a
-named `Combo`; `/deals` accepts any total and posts today's `daily_deals` row. That's a
-real duplication — same `initFloatingBasket()` call, same meter/basket-list markup,
-same page shell, in two files.
+1–2. **Basket as an obstacle** — `static/style.css` (`.basket` now docks at `left: 80%`
+   instead of dead-center), `static/wim.js` (`initFloatingBasket`). Wanderers bounce off
+   the basket's bounding box each tick (closest-edge push-out, same technique as the
+   arena-wall bounce) instead of drifting across it.
+3. **Bump physics** — `static/wim.js` (`initFloatingBasket`). While dragging, every
+   wanderer within a radius of the dragged chip's live position gets a velocity impulse
+   away from it (proportional to closeness, capped at a max speed); the existing tick
+   loop carries the nudge forward, so no separate render path was needed.
+4. **Emoji picker** — `static/meals.html` (`EMOJIS`). Expanded from 48 to ~120 covering
+   fruit, vegetables, bakery, dairy, meat/protein, rice/noodles/soups, sweets, drinks,
+   and utensils — the practical food/drink emoji set, skipping live-animal emojis.
+5. **Consolidation** — `static/builder.html` (merged), `static/deals.html` (removed),
+   `main.py` (`/deals` page route removed; `/api/deals/*` endpoints unchanged). One
+   arena, one submit action: it always upserts today's Daily Deal (any total) and
+   additionally posts a named Combo to the competition when the total is exactly 3000
+   cents. Nav drops the separate "Daily Deal" link; `/players` links back to `/builder`.
 
-**Suggested fix:** merge into one page. On submit, always upsert today's Daily Deal
-(any total, one per day, exactly like `/deals` now); *additionally*, if the total is
-exactly 3000 cents, prompt for a combo name and also post it to the competition
-leaderboard. One interaction, one arena, two possible outcomes depending on what you
-built — instead of asking the user to pick the "right" page up front.
-
-**Alternative**, if the two are meant to stay conceptually separate (competition entries
-vs. daily tracking): keep both pages but extract the now-duplicated basket/meter markup
-and submit-flow scaffolding into one shared piece, parameterized by "exact-only" vs.
-"any total" and the submit endpoint. Lower risk, less of a UX change, still kills the
-duplication.
-
-This needs a product decision (merge vs. keep-separate-but-de-duplicate) before either
-is implemented — flagged in [TODO.md](TODO.md) rather than built speculatively.
+> **Status:** Shipped.
 
 ## v0.4.0 — Seasons and polish
 

@@ -4,7 +4,7 @@ Guidance for Claude Code when working in this repository.
 
 ## Project overview
 
-**Wimbledon$ Maximizer** — a locally hosted FastAPI + SQLite web app. Users log meals (name, emoji, price in **Wimbledons**, the fake currency) and build daily meal combos that must total **exactly 30 Wimbledons** to enter the competition on the landing page, where combos are rated and commented on. A separate **Daily Deal** mode logs any real daily total (no exact-30 requirement) and ranks players by closeness to 30 on the **Players** leaderboard, all-time. Every visitor gets a signed session cookie and a display name; that name is always the server-derived author of anything they post — never a client-supplied string. An admin console edits the whole database.
+**Wimbledon$ Maximizer** — a locally hosted FastAPI + SQLite web app. Users log meals (name, emoji, price in **Wimbledons**, the fake currency) and build a daily basket in the Basket Builder. Any total logs that day's Daily Deal (tracked on the all-time **Players** leaderboard, ranked by closeness to 30); land on **exactly 30 Wimbledons** and the same basket *also* enters the competition on the landing page, where combos are rated and commented on. One arena, one submit action, two possible outcomes. Every visitor gets a signed session cookie and a display name; that name is always the server-derived author of anything they post — never a client-supplied string. An admin console edits the whole database.
 
 ## Commands
 
@@ -49,16 +49,15 @@ Single-process FastAPI app, everything in `main.py`:
 3. **Public API** — meals CRUD, combo submission (validates total == 3000 cents), ratings (one per voter, upsert), comments + comment upvotes, Daily Deal submission (one per voter per calendar day, upsert on resubmit, any total) and its two leaderboards (`today`, all-time `leaderboard` with streaks).
 4. **Live feed** — `/ws/feed` WebSocket; `ConnectionManager` broadcasts `combo_new`/`combo_update`/`combo_delete`/`rating`/`comment`/`comment_vote`/`deal` events fired from `notify()` after each write.
 5. **Admin API** — all under `/api/admin/*`, guarded by `require_admin()` comparing the `X-Admin-Key` header to `WIM_ADMIN_KEY`. Covers meals, combos (incl. item editor preserving the 3000-cent invariant), ratings, comments, and daily deals.
-6. **Pages** — `/`, `/builder`, `/deals`, `/players`, `/meals`, `/admin` serve files from `static/`; assets mount at `/static`.
+6. **Pages** — `/`, `/builder`, `/players`, `/meals`, `/admin` serve files from `static/`; assets mount at `/static`.
 
 Frontend is plain ES modules, no build step, no external requests (works fully offline):
 
-- `static/wim.js` — `WIM_SVG` glyph, `fmtW`/`wim` formatting, `renderNav(active)`, `api()` fetch wrapper, `toast()`, `starBar()`, `esc()` (**always escape user-supplied strings before inserting into innerHTML**), session helpers (`getSession`, `saveName`, `namePrompt(required)`, `ensureNamed()`, `identityLine()`/`wireIdentityChange()` — the read-only "Posting as `<name>`" UI used everywhere instead of an editable author field), `connectFeed()` (auto-reconnecting `/ws/feed` client), and `initFloatingBasket()` (shared drag-and-drop chip mechanic used by both `/builder` and `/deals`: chips wander the arena via `requestAnimationFrame` on an outer `.chip-wrap` while the inner `.float-chip` keeps its own CSS bob animation, so the two motions don't fight).
+- `static/wim.js` — `WIM_SVG` glyph, `fmtW`/`wim` formatting, `renderNav(active)`, `api()` fetch wrapper, `toast()`, `starBar()`, `esc()` (**always escape user-supplied strings before inserting into innerHTML**), session helpers (`getSession`, `saveName`, `namePrompt(required)`, `ensureNamed()`, `identityLine()`/`wireIdentityChange()` — the read-only "Posting as `<name>`" UI used everywhere instead of an editable author field), `connectFeed()` (auto-reconnecting `/ws/feed` client), and `initFloatingBasket()` (drag-and-drop chip mechanic: chips wander the arena via `requestAnimationFrame` on an outer `.chip-wrap`, bouncing off the arena edges and off the basket itself (an obstacle rect, not just a drop target), while the inner `.float-chip` keeps its own CSS bob animation so the two motions don't fight; dragging one chip also bumps nearby wanderers aside via a velocity impulse).
 - `static/index.html` — fetches `/api/combos`, renders floating cards, client-side sort (top/new), server-enforced one-vote ratings (`my_rating`), lazy-loaded comments with per-comment upvoting, top-comment snippet surfaced on the card, live-patched via `connectFeed()`.
-- `static/builder.html` — `initFloatingBasket()` into a basket `Map(meal_id -> qty)`; meter turns green at exactly 3000 cents and enables submit; POST `/api/combos` then redirect to `/`.
-- `static/deals.html` — same mechanic as builder but no exact-total gate; meter shows distance from 30 either direction; POST `/api/deals` then redirect to `/players`.
+- `static/builder.html` — the one basket-building page. `initFloatingBasket()` into a `Map(meal_id -> qty)`; submit always posts to `/api/deals` (any total, today's Daily Deal), and *additionally* posts to `/api/combos` (with a combo name) when the total lands on exactly 3000 cents. Redirects to `/` on an exact hit, `/players` otherwise.
 - `static/players.html` — today's ranking (closest to 30) and all-time standings (average distance since first submission, missed days counted as W$0, current streak).
-- `static/meals.html` — add-meal form with emoji picker + meal pool listing.
+- `static/meals.html` — add-meal form with a large food/drink emoji picker + meal pool listing.
 - `static/admin.html` — admin key kept in `sessionStorage` (`wim_admin_key`), verified via `/api/admin/verify`; four tabs (Meals / Combos / Daily Deals / Comments) with inline-editable tables.
 
 ## Workflow

@@ -21,7 +21,7 @@ BASE = Path(__file__).parent
 DB_PATH = BASE / "wimbledon.db"
 STATIC = BASE / "static"
 SECRET_PATH = BASE / ".wim_secret"
-ADMIN_KEY = os.environ.get("WIM_ADMIN_KEY", "wimbledon")
+ADMIN_KEY = os.environ.get("WIM_ADMIN_KEY", "wimbledons")
 TARGET_CENTS = 3000  # exactly W$30.00
 PORT = int(os.environ.get("WIM_PORT", "8030"))
 COOKIE = "wim_session"
@@ -381,11 +381,6 @@ def page_builder():
 @app.get("/meals")
 def page_meals():
     return FileResponse(STATIC / "meals.html")
-
-
-@app.get("/deals")
-def page_deals():
-    return FileResponse(STATIC / "deals.html")
 
 
 @app.get("/players")
