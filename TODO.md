@@ -72,6 +72,14 @@ for context on each item. Check items off as they ship.
 - [x] Cosmetic credit-share barcode: landing under 30 Wimbledons offers to generate a
       shareable barcode from a real card number you type in — purely visual, no
       backend storage or redemption, zero effect on scores or the leaderboard
+- [x] Credit-share barcode moved into a modal popup (matching the name-prompt modal)
+      instead of a panel stranded at the bottom of the page
+- [x] Bigger Basket Builder arena (560px → 720px desktop, 440px → 480px mobile);
+      arena's share of the layout grid widened (1.6fr → 2fr) now that the meal pool
+      has grown
+- [x] Search box next to "Still fits", filtering the suggestions list by meal name;
+      the default (no search) list is capped to 12 so a large pool doesn't produce
+      an unusably long list — the search box is how you find the rest
 
 ## v0.4.0 — Seasons and polish
 
@@ -80,8 +88,6 @@ for context on each item. Check items off as they ship.
 - [ ] Winner podium (top 3) section on the leaderboard
 - [ ] Optional meal photo upload (stored next to the DB, served statically)
 - [ ] Bigger touch targets + drop feedback for mobile drag
-- [ ] Bigger Basket Builder arena — more room for chips to wander and the basket
-      to breathe, especially once the suggestions panel is also competing for space
 - [ ] Dockerfile + docker-compose.yml
 
 ## Housekeeping

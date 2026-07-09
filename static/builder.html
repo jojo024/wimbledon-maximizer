@@ -14,7 +14,7 @@
     <strong>Daily Deal</strong> — see how you rank on <a href="/players" style="color:var(--green-neon)">Players</a>.
     Land on <strong>exactly 30 Wimbledons</strong> and it also enters the competition leaderboard.</p>
 
-  <div class="builder-layout" style="display:grid;grid-template-columns:1.6fr 1fr;gap:24px;align-items:start">
+  <div class="builder-layout" style="display:grid;grid-template-columns:2fr 1fr;gap:24px;align-items:start">
     <div class="arena" id="arena">
       <div class="basket" id="basket">
         <span>&#129530;</span>
@@ -41,19 +41,29 @@
         <button class="btn btn-green" id="submit-btn" disabled>Add something to your basket</button>
       </form>
 
-      <div id="suggestions" class="suggestions"></div>
+      <div id="suggestions" class="suggestions">
+        <div class="suggest-header">
+          <span class="suggest-label" id="suggest-label"></span>
+          <input type="text" id="suggest-search" class="suggest-search" placeholder="Search meals…">
+        </div>
+        <div class="suggest-chips" id="suggest-chips"></div>
+      </div>
     </div>
   </div>
 
-  <div class="panel" id="credit-share" style="display:none;max-width:480px;margin:24px auto 0">
-    <h3 style="margin:0 0 4px">Share your card</h3>
-    <p class="section-sub" id="credit-share-msg" style="margin-bottom:14px"></p>
-    <form id="credit-share-form" style="display:flex;gap:8px;margin-bottom:14px">
-      <input name="cardnum" placeholder="Card number" maxlength="30" style="flex:1" required>
-      <button class="btn btn-sm btn-green" type="submit">Generate barcode</button>
-    </form>
-    <div id="barcode-out"></div>
-    <a href="/players" class="btn btn-sm" style="margin-top:16px;display:inline-block">Continue to Players &rarr;</a>
+  <div class="modal-overlay" id="credit-share" style="display:none">
+    <div class="modal">
+      <h3>&#129530; Share your card</h3>
+      <p id="credit-share-msg"></p>
+      <form id="credit-share-form">
+        <input name="cardnum" placeholder="Card number" maxlength="30" required>
+        <div class="modal-actions">
+          <a href="/players" class="btn btn-sm">Continue to Players &rarr;</a>
+          <button class="btn btn-sm btn-green" type="submit">Generate barcode</button>
+        </div>
+      </form>
+      <div id="barcode-out" style="margin-top:14px"></div>
+    </div>
   </div>
 </main>
 
@@ -143,26 +153,42 @@ function scheduleSaveBasket() {
 }
 
 // Meals from the pool that would still fit without going over 30 Wimbledons —
-// click one to add it straight to the basket, same as dragging it in.
+// click one to add it straight to the basket, same as dragging it in. Capped
+// to SUGGEST_CAP by default (the pool can be large); typing in the search box
+// lifts the cap since it's already narrowed things down.
+const SUGGEST_CAP = 12;
+const suggestLabel = document.getElementById("suggest-label");
+const suggestChips = document.getElementById("suggest-chips");
+const suggestSearch = document.getElementById("suggest-search");
+
 function renderSuggestions(t) {
   const remaining = TARGET - t;
-  if (remaining <= 0) { suggestBox.innerHTML = ""; return; }
-  const fits = meals
-    .filter(m => m.price_cents <= remaining)
-    .sort((a, b) => b.price_cents - a.price_cents);
-  if (fits.length === 0) {
-    suggestBox.innerHTML = `<div class="suggest-label">Still fits (${fmtW(remaining)} Wimbledons left)</div>
-      <span class="empty-hint">Nothing in the pool fits in what's left.</span>`;
+  if (remaining <= 0) {
+    suggestLabel.textContent = "";
+    suggestChips.innerHTML = "";
+    suggestSearch.style.display = "none";
     return;
   }
-  suggestBox.innerHTML = `
-    <div class="suggest-label">Still fits (${fmtW(remaining)} Wimbledons left)</div>
-    <div class="suggest-chips">
-      ${fits.map(m => `<button type="button" class="suggest-chip${m.price_cents === remaining ? " perfect" : ""}" data-id="${m.id}">
+  suggestSearch.style.display = "";
+  const search = suggestSearch.value.trim().toLowerCase();
+  let fits = meals.filter(m => m.price_cents <= remaining);
+  if (search) fits = fits.filter(m => m.name.toLowerCase().includes(search));
+  fits.sort((a, b) => b.price_cents - a.price_cents);
+
+  suggestLabel.textContent = `Still fits (${fmtW(remaining)} Wimbledons left)`;
+  if (fits.length === 0) {
+    suggestChips.innerHTML = `<span class="empty-hint">${search ? "No matches." : "Nothing in the pool fits in what's left."}</span>`;
+    return;
+  }
+  const shown = search ? fits : fits.slice(0, SUGGEST_CAP);
+  const hiddenCount = fits.length - shown.length;
+  suggestChips.innerHTML = shown.map(m => `<button type="button" class="suggest-chip${m.price_cents === remaining ? " perfect" : ""}" data-id="${m.id}">
         <span class="emoji">${esc(m.emoji)}</span>${esc(m.name)} ${wim(m.price_cents)}
-      </button>`).join("")}
-    </div>`;
+      </button>`).join("")
+    + (hiddenCount > 0 ? `<span class="suggest-more">+${hiddenCount} more — search to find them</span>` : "");
 }
+
+suggestSearch.addEventListener("input", () => renderSuggestions(total()));
 
 suggestBox.addEventListener("click", e => {
   const chip = e.target.closest(".suggest-chip");
@@ -224,9 +250,14 @@ function showCreditShare(leftoverCents) {
     `You had ${fmtW(leftoverCents)} Wimbledons left on your card today — ` +
     `enter its number to generate a barcode you can share so someone else can stock up.`;
   document.getElementById("barcode-out").innerHTML = "";
-  creditShareBox.style.display = "block";
-  creditShareBox.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  creditShareBox.style.display = "flex";
+  creditShareBox.querySelector('[name="cardnum"]').focus();
 }
+
+// Click the backdrop (not the card itself) to dismiss without navigating.
+creditShareBox.addEventListener("click", e => {
+  if (e.target === creditShareBox) creditShareBox.style.display = "none";
+});
 
 document.getElementById("credit-share-form").addEventListener("submit", e => {
   e.preventDefault();
