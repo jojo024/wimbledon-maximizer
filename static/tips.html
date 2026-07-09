@@ -10,7 +10,7 @@
 <body>
 <main>
   <h2 class="section-title">Tips &amp; Tricks</h2>
-  <p class="section-sub">Share what's helped you maximize your Wimbledons. Best tips rise to the top — upvote the ones that worked for you.</p>
+  <p class="section-sub">Share what's helped you maximize your Wimbledons. React to the ones that worked (or didn't) for you — best tips rise to the top by score (&#9650; minus &#9660;).</p>
 
   <div class="panel" style="max-width:640px;margin:0 auto 24px">
     <form id="tip-form" style="display:flex;flex-direction:column;gap:10px">
@@ -27,35 +27,53 @@
 import { renderNav, api, esc, toast, getSession, ensureNamed, identityLine, connectFeed } from "/static/wim.js";
 renderNav("/tips");
 
+const REACTIONS = [
+  ["up", "&#9650;", "Upvote"],
+  ["down", "&#9660;", "Downvote"],
+  ["fire", "&#128293;", "Fire"],
+  ["heart", "&#10084;&#65039;", "Love it"],
+  ["laugh", "&#128514;", "Funny"],
+  ["cry", "&#128546;", "Sad"],
+];
+
 let tips = [];
 const listEl = document.getElementById("tip-list");
 const identitySlot = document.getElementById("identity-slot");
 
 function sortTips() {
-  tips.sort((a, b) => b.votes - a.votes || b.id - a.id);
+  tips.sort((a, b) => b.score - a.score || b.id - a.id);
+}
+
+function reactionBar(t) {
+  return REACTIONS.map(([key, glyph, label]) => `
+    <button class="react-btn${t.my_reactions.includes(key) ? " active" : ""}" data-r="${key}" title="${label}">
+      ${glyph}<span>${t.counts[key]}</span>
+    </button>`).join("");
 }
 
 function render() {
   listEl.innerHTML = tips.length
     ? tips.map((t, i) => `
-        <div class="comment${t.votes > 0 && i === 0 ? " top" : ""}" data-id="${t.id}">
-          <button class="cvote${t.my_vote ? " voted" : ""}" data-act="vote-tip" title="Upvote this tip">
-            &#9650;<span class="cvote-n">${t.votes}</span>
-          </button>
+        <div class="comment${t.score > 0 && i === 0 ? " top" : ""}" data-id="${t.id}">
+          <div class="reactions">${reactionBar(t)}</div>
           <div class="ctext"><span class="cauthor">${esc(t.author)}</span>${esc(t.text)}</div>
         </div>`).join("")
     : `<span class="empty-hint">No tips yet — be the first to share one.</span>`;
 }
 
 listEl.addEventListener("click", async e => {
-  const btn = e.target.closest('[data-act="vote-tip"]');
+  const btn = e.target.closest("[data-r]");
   if (!btn) return;
   const id = Number(btn.closest("[data-id]").dataset.id);
+  const reaction = btn.dataset.r;
   try {
-    const res = await api("POST", `/api/tips/${id}/vote`);
+    const res = await api("POST", `/api/tips/${id}/react`, { reaction });
     const tip = tips.find(t => t.id === id);
-    tip.votes = res.votes;
-    tip.my_vote = res.my_vote;
+    tip.counts = res.counts;
+    tip.score = res.counts.up - res.counts.down;
+    tip.my_reactions = res.mine
+      ? [...tip.my_reactions, reaction]
+      : tip.my_reactions.filter(r => r !== reaction);
     sortTips();
     render();
   } catch (err) { toast(err.message, true); }
@@ -84,13 +102,24 @@ connectFeed(ev => {
       sortTips();
       render();
     }
-  } else if (ev.type === "tip_vote") {
+  } else if (ev.type === "tip_react") {
     const tip = tips.find(t => t.id === ev.tip_id);
     if (tip) {
-      tip.votes = ev.votes;
+      tip.counts = ev.counts;
+      tip.score = ev.score;
       sortTips();
       render();
     }
+  } else if (ev.type === "tip_update") {
+    const tip = tips.find(t => t.id === ev.tip_id);
+    if (tip) {
+      tip.author = ev.author;
+      tip.text = ev.text;
+      render();
+    }
+  } else if (ev.type === "tip_delete") {
+    const i = tips.findIndex(t => t.id === ev.tip_id);
+    if (i !== -1) { tips.splice(i, 1); render(); }
   }
 });
 

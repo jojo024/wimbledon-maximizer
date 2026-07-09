@@ -34,24 +34,30 @@ export function esc(s) {
 // functional redemption mechanism.
 export function renderBarcode(cardNumber) {
   const clean = String(cardNumber).trim().slice(0, 30);
-  let x = 6;
-  const bars = [`<rect x="0" y="2" width="4" height="52" fill="#000"/>`];
-  x += 6;
+  const GAP = 1; // tight spacing — real barcodes read as near-continuous bars
+  let x = 4;
+  const bars = [];
+  const addBar = w => {
+    bars.push(`<rect x="${x}" y="4" width="${w}" height="56" fill="#000"/>`);
+    x += w + GAP;
+  };
+
+  addBar(3); addBar(1); addBar(3); // start guard pattern
   for (const ch of clean) {
     const code = ch.charCodeAt(0);
-    for (let i = 0; i < 3; i++) {
-      const w = 2 + ((code >> (i * 2)) & 3); // 2-5px, deterministic per char
-      bars.push(`<rect x="${x}" y="2" width="${w}" height="52" fill="#000"/>`);
-      x += w + 3;
+    for (let i = 0; i < 5; i++) {
+      const w = 1 + ((code >> (i * 2)) & 3); // 1-4px, narrow-dominant like a real barcode
+      addBar(w);
     }
   }
-  bars.push(`<rect x="${x}" y="2" width="4" height="52" fill="#000"/>`);
-  x += 4 + 6;
-  return `<svg viewBox="0 0 ${x} 72" width="100%" height="100" xmlns="http://www.w3.org/2000/svg"
+  addBar(3); addBar(1); addBar(3); // end guard pattern
+  x += 4;
+
+  return `<svg viewBox="0 0 ${x} 76" width="100%" height="100" xmlns="http://www.w3.org/2000/svg"
     role="img" aria-label="Barcode for card ${esc(clean)}">
-    <rect x="0" y="0" width="${x}" height="72" fill="#fff"/>
+    <rect x="0" y="0" width="${x}" height="76" fill="#fff"/>
     ${bars.join("")}
-    <text x="${x / 2}" y="68" font-size="11" text-anchor="middle" fill="#000"
+    <text x="${x / 2}" y="72" font-size="11" text-anchor="middle" fill="#000"
       font-family="monospace" letter-spacing="1">${esc(clean)}</text>
   </svg>`;
 }

@@ -156,6 +156,15 @@ nav.wim-nav .spacer { flex: 1; }
   box-shadow: 0 0 14px rgba(34, 197, 94, 0.25);
 }
 
+/* admin-curated for-fun combos, kept visually distinct from real competitive entries */
+.card.honourable { border-color: rgba(139, 92, 246, 0.55); }
+.honourable-badge {
+  display: flex; align-items: center; gap: 5px; font-size: 0.72rem; font-weight: 800;
+  text-transform: uppercase; letter-spacing: 0.05em; color: var(--purple-bright);
+  margin-bottom: 8px;
+}
+.honourable-tag { margin-right: 6px; }
+
 .card-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; border-top: 1px solid rgba(139, 92, 246, 0.15); padding-top: 12px; margin-top: 4px; }
 
 /* ---------- stars ---------- */
@@ -241,6 +250,18 @@ label.f { display: flex; flex-direction: column; gap: 6px; font-size: 0.85rem; c
 .comment .cvote-n { font-weight: 700; font-size: 0.82rem; }
 .comment-form { display: flex; gap: 8px; margin-top: 10px; }
 .comment-form input { flex: 1; padding: 8px 12px; }
+
+/* multi-reaction bar (Tips & Tricks): up/down + fire/heart/laugh/cry, each an
+   independent toggle — several can be active at once on the same tip */
+.reactions { flex: none; display: flex; flex-wrap: wrap; gap: 4px; max-width: 120px; }
+.react-btn {
+  display: flex; align-items: center; gap: 3px; padding: 3px 7px; border-radius: 8px;
+  background: transparent; border: 1px solid var(--glass-border); color: var(--muted);
+  font-size: 0.72rem; cursor: pointer; line-height: 1.4; transition: all 0.15s;
+}
+.react-btn:hover { border-color: var(--green-neon); color: var(--text); }
+.react-btn.active { color: var(--green-neon); border-color: var(--green-neon); background: rgba(34, 197, 94, 0.12); }
+.react-btn[data-r="down"].active { color: var(--red); border-color: var(--red); background: rgba(248, 113, 113, 0.12); }
 
 /* ---------- builder arena ---------- */
 

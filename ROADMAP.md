@@ -210,6 +210,70 @@ ratings and comments, admin console, W$ glyph, purple/green futuristic theme.
 
 > **Status:** Shipped.
 
+## v0.3.5 — Tip reactions, admin edit powers, one deal per day
+
+| # | Item | Effort | Why now |
+|---|------|--------|---------|
+| 1 | Generalize tip upvotes into six reactions | M | User request: downvote plus fire/heart/laugh/cry — a richer, funnier signal than a single upvote |
+| 2 | Admin can edit comments and tips, not just delete | S | "Admin edits the whole database" was incomplete — comments/tips were delete-only |
+| 3 | Daily Deal becomes strictly one submission per day | S | Resubmitting to "correct" a deal undermined the streak/showing-up incentive; the user wanted a hard stop with a clear warning instead |
+| 4 | Basket resets immediately after submitting | XS | Companion to #3 — once submission is one-shot, leaving the just-submitted items visible in the basket is misleading |
+
+### Item details
+
+1. **Reactions** — `main.py`. `tip_votes` (single upvote) replaced by `tip_reactions`
+   (`tip_id, voter_id, reaction` with a `CHECK` constraint on six values), migrated
+   idempotently from any existing `tip_votes` rows as `'up'`. Each reaction toggles
+   independently — a tip can be simultaneously 🔥'd and ❤️'d by the same person.
+   Sort score is `up - down`; the other four don't affect ranking, matching the
+   "reactions vs. ranking signal" split real platforms use. `static/tips.html` gets
+   a six-button reaction bar per tip (reusing `.comment`/`.ctext`/`.cauthor`, adding
+   `.reactions`/`.react-btn`).
+2. **Admin edit** — `main.py` (`AdminTextUpdate` model, `PUT /api/admin/comments/{id}`,
+   `PUT /api/admin/tips/{id}`), `static/admin.html` (author/text become inline inputs
+   + a Save button, matching the meals/combos tables).
+3. **One deal per day** — `main.py` (`submit_deal` drops the `ON CONFLICT DO UPDATE`
+   upsert; the `INSERT` either succeeds once or raises `IntegrityError` off the
+   existing `UNIQUE(voter_id, deal_date)` constraint, caught and turned into a 400 —
+   atomic by construction, no separate check-then-insert race). `static/builder.html`
+   checks `/api/deals/today` for the caller's own entry on load and shows a locked
+   "already submitted" view instead of the basket UI when found.
+4. **Basket reset on submit** — `static/builder.html`: `basket.clear()` +
+   `renderBasket()` right after a successful submit, before the toast/redirect;
+   `submit_deal` also clears that day's `basket_drafts` row server-side.
+
+> **Status:** Shipped.
+
+## v0.3.6 — Honourable mentions, barcode realism
+
+| # | Item | Effort | Why now |
+|---|------|--------|---------|
+| 1 | Admin-created "honourable mention" combos | M | User request: funky, admin-curated 30-Wimbledon combos for laughs, visible but explicitly outside the competitive ranking |
+| 2 | Denser, more realistic barcode rendering | XS | User supplied a reference photo of an actual barcode; the original render was too sparse/gappy to read as one |
+| 3 | Credit-share popup gated on a minimum leftover | XS | Below the price of the cheapest catalog item (W$1.05), there's nothing to meaningfully "stock up" on |
+
+### Item details
+
+1. **Honourable mentions** — `main.py` (`combos.honourable` column, migrated in for
+   existing DBs; `AdminComboCreate` model; `POST /api/admin/combos` — still validates
+   the exact-3000-cent invariant, just flags the row instead of requiring a real
+   player submission). `static/index.html` splits combos client-side into the normal
+   sortable grid and a separate "🏆 Honourable Mentions" section (own grid, no sort
+   toggle, excluded from `sortCombos()`); rating/commenting still work on them via
+   the same delegated listeners (moved from `grid`-scoped to `document`-scoped so
+   both grids share one set of handlers). `static/admin.html` gets a "+ New
+   honourable mention" panel reusing the existing combo item-editor markup, branching
+   on whether a `tr.combo-editor` ancestor exists (editing) or not (creating).
+2. **Barcode density** — `static/wim.js` (`renderBarcode()`): gap between bars
+   1px → was 3px, 5 bar segments per character (was 3), width range narrowed to
+   1-4px and narrow-dominant. Still a deterministic cosmetic pattern, not a real
+   Code39/Code128 encoding.
+3. **Credit-share threshold** — `static/builder.html`: the popup only fires when
+   `distance_cents > 105`; otherwise the normal under-30 redirect happens with no
+   prompt.
+
+> **Status:** Shipped.
+
 ## v0.4.0 — Seasons and polish
 
 | # | Item | Effort | Why now |

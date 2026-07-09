@@ -94,6 +94,7 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             author TEXT NOT NULL,
+            honourable INTEGER NOT NULL DEFAULT 0,
             created_at TEXT DEFAULT (datetime('now'))
         );
         CREATE TABLE IF NOT EXISTS combo_items(
@@ -155,6 +156,12 @@ def init_db():
             voter_id TEXT NOT NULL,
             PRIMARY KEY (tip_id, voter_id)
         );
+        CREATE TABLE IF NOT EXISTS tip_reactions(
+            tip_id INTEGER NOT NULL REFERENCES tips(id) ON DELETE CASCADE,
+            voter_id TEXT NOT NULL,
+            reaction TEXT NOT NULL CHECK(reaction IN ('up','down','fire','heart','laugh','cry')),
+            PRIMARY KEY (tip_id, voter_id, reaction)
+        );
         CREATE TABLE IF NOT EXISTS basket_drafts(
             voter_id TEXT NOT NULL,
             basket_date TEXT NOT NULL,
@@ -171,6 +178,16 @@ def init_db():
         # seed ratings (voter_id IS NULL) never collide.
         conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_ratings_voter"
                      " ON ratings(combo_id, voter_id)")
+        # Migrate pre-0.3.5 single-upvote tips into the richer reaction model
+        # (up/down/fire/heart/laugh/cry). Idempotent — INSERT OR IGNORE means
+        # re-running this after the first migration is a harmless no-op.
+        conn.execute(
+            "INSERT OR IGNORE INTO tip_reactions(tip_id, voter_id, reaction)"
+            " SELECT tip_id, voter_id, 'up' FROM tip_votes")
+        # Migrate pre-0.3.6 combos tables that lack the honourable flag.
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(combos)").fetchall()]
+        if "honourable" not in cols:
+            conn.execute("ALTER TABLE combos ADD COLUMN honourable INTEGER NOT NULL DEFAULT 0")
 
         if conn.execute("SELECT COUNT(*) FROM meals").fetchone()[0] == 0:
             conn.executemany(
@@ -379,11 +396,29 @@ class ComboItemsUpdate(BaseModel):
     items: list[SnapshotItemIn] = Field(min_length=1)
 
 
+class AdminComboCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=60)
+    author: str = Field(min_length=1, max_length=40)
+    items: list[SnapshotItemIn] = Field(min_length=1)
+
+
 class NameIn(BaseModel):
     name: str = Field(min_length=1, max_length=40)
 
 
 class TipIn(BaseModel):
+    text: str = Field(min_length=1, max_length=500)
+
+
+REACTIONS = ("up", "down", "fire", "heart", "laugh", "cry")
+
+
+class ReactIn(BaseModel):
+    reaction: str = Field(min_length=1, max_length=10)
+
+
+class AdminTextUpdate(BaseModel):
+    author: str = Field(min_length=1, max_length=40)
     text: str = Field(min_length=1, max_length=500)
 
 
@@ -415,6 +450,7 @@ def serialize_combo(conn, c, voter_id: str | None = None) -> dict:
         my_rating = row["stars"] if row else None
     return {
         "id": c["id"], "name": c["name"], "author": c["author"],
+        "honourable": bool(c["honourable"]),
         "created_at": c["created_at"],
         "items": [dict(i) for i in items],
         "total_cents": sum(i["price_cents"] * i["qty"] for i in items),
@@ -629,17 +665,39 @@ def vote_comment(comment_id: int, voter_id: str = Depends(get_voter)):
     return {"votes": votes, "my_vote": my_vote}
 
 
+def tip_reaction_counts(conn, tip_id: int) -> dict:
+    rows = conn.execute(
+        "SELECT reaction, COUNT(*) n FROM tip_reactions WHERE tip_id=? GROUP BY reaction",
+        (tip_id,)).fetchall()
+    counts = {r: 0 for r in REACTIONS}
+    for row in rows:
+        counts[row["reaction"]] = row["n"]
+    return counts
+
+
 @app.get("/api/tips")
 def get_tips(voter_id: str = Depends(get_voter)):
     with db() as conn:
         rows = conn.execute(
             "SELECT t.id, t.author, t.text, t.created_at,"
-            " COUNT(v.voter_id) AS votes,"
-            " MAX(CASE WHEN v.voter_id=? THEN 1 ELSE 0 END) AS my_vote"
-            " FROM tips t LEFT JOIN tip_votes v ON v.tip_id = t.id"
-            " GROUP BY t.id ORDER BY votes DESC, t.id DESC",
+            " SUM(CASE WHEN r.reaction='up' THEN 1 ELSE 0 END) AS up,"
+            " SUM(CASE WHEN r.reaction='down' THEN 1 ELSE 0 END) AS down,"
+            " SUM(CASE WHEN r.reaction='fire' THEN 1 ELSE 0 END) AS fire,"
+            " SUM(CASE WHEN r.reaction='heart' THEN 1 ELSE 0 END) AS heart,"
+            " SUM(CASE WHEN r.reaction='laugh' THEN 1 ELSE 0 END) AS laugh,"
+            " SUM(CASE WHEN r.reaction='cry' THEN 1 ELSE 0 END) AS cry,"
+            " GROUP_CONCAT(CASE WHEN r.voter_id=? THEN r.reaction END) AS mine_csv"
+            " FROM tips t LEFT JOIN tip_reactions r ON r.tip_id = t.id"
+            " GROUP BY t.id",
             (voter_id,)).fetchall()
-    return [{**dict(r), "my_vote": bool(r["my_vote"])} for r in rows]
+    out = [{
+        "id": r["id"], "author": r["author"], "text": r["text"], "created_at": r["created_at"],
+        "counts": {k: r[k] for k in REACTIONS},
+        "score": r["up"] - r["down"],
+        "my_reactions": [x for x in (r["mine_csv"] or "").split(",") if x],
+    } for r in rows]
+    out.sort(key=lambda t: (-t["score"], -t["id"]))
+    return out
 
 
 @app.post("/api/tips", status_code=201, dependencies=[Depends(rate_limit)])
@@ -651,31 +709,37 @@ def add_tip(tip: TipIn, voter_id: str = Depends(get_voter)):
         tip_id = cur.lastrowid
         row = conn.execute(
             "SELECT id, author, text, created_at FROM tips WHERE id=?", (tip_id,)).fetchone()
-    payload = {**dict(row), "votes": 0, "my_vote": False}
+    payload = {
+        **dict(row), "counts": {r: 0 for r in REACTIONS}, "score": 0, "my_reactions": [],
+    }
     notify({"type": "tip_new", "tip": payload})
     return {"id": tip_id}
 
 
-@app.post("/api/tips/{tip_id}/vote", dependencies=[Depends(rate_limit)])
-def vote_tip(tip_id: int, voter_id: str = Depends(get_voter)):
+@app.post("/api/tips/{tip_id}/react", dependencies=[Depends(rate_limit)])
+def react_tip(tip_id: int, payload: ReactIn, voter_id: str = Depends(get_voter)):
+    if payload.reaction not in REACTIONS:
+        raise HTTPException(400, "Unknown reaction")
     with db() as conn:
         if not conn.execute("SELECT 1 FROM tips WHERE id=?", (tip_id,)).fetchone():
             raise HTTPException(404, "Tip not found")
         existing = conn.execute(
-            "SELECT 1 FROM tip_votes WHERE tip_id=? AND voter_id=?",
-            (tip_id, voter_id)).fetchone()
+            "SELECT 1 FROM tip_reactions WHERE tip_id=? AND voter_id=? AND reaction=?",
+            (tip_id, voter_id, payload.reaction)).fetchone()
         if existing:
             conn.execute(
-                "DELETE FROM tip_votes WHERE tip_id=? AND voter_id=?", (tip_id, voter_id))
-            my_vote = False
+                "DELETE FROM tip_reactions WHERE tip_id=? AND voter_id=? AND reaction=?",
+                (tip_id, voter_id, payload.reaction))
+            mine = False
         else:
             conn.execute(
-                "INSERT INTO tip_votes(tip_id, voter_id) VALUES (?,?)", (tip_id, voter_id))
-            my_vote = True
-        votes = conn.execute(
-            "SELECT COUNT(*) FROM tip_votes WHERE tip_id=?", (tip_id,)).fetchone()[0]
-    notify({"type": "tip_vote", "tip_id": tip_id, "votes": votes})
-    return {"votes": votes, "my_vote": my_vote}
+                "INSERT INTO tip_reactions(tip_id, voter_id, reaction) VALUES (?,?,?)",
+                (tip_id, voter_id, payload.reaction))
+            mine = True
+        counts = tip_reaction_counts(conn, tip_id)
+    notify({"type": "tip_react", "tip_id": tip_id, "counts": counts,
+            "score": counts["up"] - counts["down"]})
+    return {"counts": counts, "reaction": payload.reaction, "mine": mine}
 
 
 def deal_distance(total_cents: int) -> int:
@@ -684,6 +748,10 @@ def deal_distance(total_cents: int) -> int:
 
 @app.post("/api/deals", status_code=201, dependencies=[Depends(rate_limit)])
 def submit_deal(deal: DealIn, voter_id: str = Depends(get_voter)):
+    """One submission per (voter, day) — no correcting a resubmit. The
+    UNIQUE(voter_id, deal_date) constraint is what actually enforces this;
+    the INSERT either succeeds once or raises IntegrityError, so there's no
+    check-then-insert race between two tabs submitting at once."""
     with db() as conn:
         name = require_named(conn, voter_id)
         snapshot = []
@@ -695,17 +763,20 @@ def submit_deal(deal: DealIn, voter_id: str = Depends(get_voter)):
             snapshot.append((meal["name"], meal["emoji"], meal["price_cents"], item.qty))
             total += meal["price_cents"] * item.qty
         today = date.today().isoformat()
-        cur = conn.execute(
-            "INSERT INTO daily_deals(voter_id, deal_date, total_cents) VALUES (?,?,?)"
-            " ON CONFLICT(voter_id, deal_date) DO UPDATE SET total_cents=excluded.total_cents"
-            " RETURNING id",
-            (voter_id, today, total))
-        deal_id = cur.fetchone()["id"]
-        conn.execute("DELETE FROM daily_deal_items WHERE deal_id=?", (deal_id,))
+        try:
+            cur = conn.execute(
+                "INSERT INTO daily_deals(voter_id, deal_date, total_cents) VALUES (?,?,?)",
+                (voter_id, today, total))
+        except sqlite3.IntegrityError:
+            raise HTTPException(
+                400, "You've already submitted today's Daily Deal — come back tomorrow.")
+        deal_id = cur.lastrowid
         conn.executemany(
             "INSERT INTO daily_deal_items(deal_id, meal_name, emoji, price_cents, qty)"
             " VALUES (?,?,?,?,?)",
             [(deal_id, n, e, p, q) for n, e, p, q in snapshot])
+        conn.execute(
+            "DELETE FROM basket_drafts WHERE voter_id=? AND basket_date=?", (voter_id, today))
     notify({"type": "deal", "voter_id": voter_id, "name": name,
             "deal_date": today, "total_cents": total, "distance_cents": deal_distance(total)})
     return {"id": deal_id, "deal_date": today, "total_cents": total,
@@ -860,6 +931,33 @@ def admin_update_combo(combo_id: int, upd: ComboUpdate,
     return {"ok": True}
 
 
+@app.post("/api/admin/combos", status_code=201, dependencies=[Depends(rate_limit)])
+def admin_create_combo(payload: AdminComboCreate, x_admin_key: str | None = Header(default=None)):
+    """Admin-authored "honourable mention" combos: still must total exactly
+    3000 cents (the joke only lands if it's a real 30-Wimbledon combination),
+    but flagged so the public leaderboard shows them separately and never
+    factors them into the real ranking — funky, not competitive."""
+    require_admin(x_admin_key)
+    total = sum(i.price_cents * i.qty for i in payload.items)
+    if total != TARGET_CENTS:
+        raise HTTPException(
+            400, f"Combo must total exactly 30 Wimbledons — got W${total / 100:.2f}")
+    with db() as conn:
+        cur = conn.execute(
+            "INSERT INTO combos(name, author, honourable) VALUES (?,?,1)",
+            (payload.name.strip(), payload.author.strip()))
+        cid = cur.lastrowid
+        conn.executemany(
+            "INSERT INTO combo_items(combo_id, meal_name, emoji, price_cents, qty)"
+            " VALUES (?,?,?,?,?)",
+            [(cid, i.meal_name.strip(), i.emoji.strip(), i.price_cents, i.qty)
+             for i in payload.items])
+        combo_row = conn.execute("SELECT * FROM combos WHERE id=?", (cid,)).fetchone()
+        out = serialize_combo(conn, combo_row)
+    notify({"type": "combo_new", "combo": out})
+    return {"id": cid}
+
+
 @app.put("/api/admin/combos/{combo_id}/items", dependencies=[Depends(rate_limit)])
 def admin_update_combo_items(combo_id: int, upd: ComboItemsUpdate,
                              x_admin_key: str | None = Header(default=None)):
@@ -936,6 +1034,25 @@ def admin_delete_deal(deal_id: int, x_admin_key: str | None = Header(default=Non
     return {"ok": True}
 
 
+@app.put("/api/admin/comments/{comment_id}", dependencies=[Depends(rate_limit)])
+def admin_update_comment(comment_id: int, upd: AdminTextUpdate,
+                         x_admin_key: str | None = Header(default=None)):
+    require_admin(x_admin_key)
+    with db() as conn:
+        row = conn.execute(
+            "SELECT combo_id FROM comments WHERE id=?", (comment_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Comment not found")
+        conn.execute("UPDATE comments SET author=?, text=? WHERE id=?",
+                     (upd.author.strip(), upd.text.strip(), comment_id))
+        combo_id = row["combo_id"]
+        n = conn.execute(
+            "SELECT COUNT(*) FROM comments WHERE combo_id=?", (combo_id,)).fetchone()[0]
+        tc = top_comment(conn, combo_id)
+    notify({"type": "comment", "combo_id": combo_id, "comment_count": n, "top_comment": tc})
+    return {"ok": True}
+
+
 @app.delete("/api/admin/comments/{comment_id}", dependencies=[Depends(rate_limit)])
 def admin_delete_comment(comment_id: int, x_admin_key: str | None = Header(default=None)):
     require_admin(x_admin_key)
@@ -958,10 +1075,28 @@ def admin_all_tips(x_admin_key: str | None = Header(default=None)):
     require_admin(x_admin_key)
     with db() as conn:
         rows = conn.execute(
-            "SELECT t.id, t.author, t.text, t.created_at, COUNT(v.voter_id) AS votes"
-            " FROM tips t LEFT JOIN tip_votes v ON v.tip_id = t.id"
+            "SELECT t.id, t.author, t.text, t.created_at,"
+            " SUM(CASE WHEN r.reaction='up' THEN 1 ELSE 0 END) AS up,"
+            " SUM(CASE WHEN r.reaction='down' THEN 1 ELSE 0 END) AS down,"
+            " COUNT(r.voter_id) AS total_reactions"
+            " FROM tips t LEFT JOIN tip_reactions r ON r.tip_id = t.id"
             " GROUP BY t.id ORDER BY t.id DESC").fetchall()
-    return [dict(r) for r in rows]
+    return [{**dict(r), "score": r["up"] - r["down"]} for r in rows]
+
+
+@app.put("/api/admin/tips/{tip_id}", dependencies=[Depends(rate_limit)])
+def admin_update_tip(tip_id: int, upd: AdminTextUpdate,
+                     x_admin_key: str | None = Header(default=None)):
+    require_admin(x_admin_key)
+    with db() as conn:
+        cur = conn.execute(
+            "UPDATE tips SET author=?, text=? WHERE id=?",
+            (upd.author.strip(), upd.text.strip(), tip_id))
+        if cur.rowcount == 0:
+            raise HTTPException(404, "Tip not found")
+    notify({"type": "tip_update", "tip_id": tip_id,
+            "author": upd.author.strip(), "text": upd.text.strip()})
+    return {"ok": True}
 
 
 @app.delete("/api/admin/tips/{tip_id}", dependencies=[Depends(rate_limit)])
@@ -971,6 +1106,7 @@ def admin_delete_tip(tip_id: int, x_admin_key: str | None = Header(default=None)
         cur = conn.execute("DELETE FROM tips WHERE id=?", (tip_id,))
         if cur.rowcount == 0:
             raise HTTPException(404, "Tip not found")
+    notify({"type": "tip_delete", "tip_id": tip_id})
     return {"ok": True}
 
 

@@ -14,7 +14,13 @@
     <strong>Daily Deal</strong> — see how you rank on <a href="/players" style="color:var(--green-neon)">Players</a>.
     Land on <strong>exactly 30 Wimbledons</strong> and it also enters the competition leaderboard.</p>
 
-  <div class="builder-layout" style="display:grid;grid-template-columns:2fr 1fr;gap:24px;align-items:start">
+  <div class="panel" id="locked-view" style="display:none;max-width:520px;margin:0 auto 24px">
+    <h3 style="margin:0 0 8px">Today's deal is locked in</h3>
+    <p class="section-sub" id="locked-msg"></p>
+    <a href="/players" class="btn btn-green" style="display:inline-block;margin-top:8px">See the Players leaderboard &rarr;</a>
+  </div>
+
+  <div class="builder-layout" id="builder-layout" style="display:grid;grid-template-columns:2fr 1fr;gap:24px;align-items:start">
     <div class="arena" id="arena">
       <div class="basket" id="basket">
         <span>&#129530;</span>
@@ -74,6 +80,7 @@ renderNav("/builder");
 
 const TARGET = 3000;
 const VIS_CAP = TARGET * 2; // meter bar visualizes up to 60 Wimbledons
+const CHEAPEST_ITEM_CENTS = 105; // W$1.05 — below this, there's nothing left to "stock up" on
 const arena = document.getElementById("arena");
 const basketEl = document.getElementById("basket");
 const listEl = document.getElementById("basket-list");
@@ -227,14 +234,19 @@ document.getElementById("submit-form").addEventListener("submit", async e => {
   const exact = total() === TARGET;
   try {
     const deal = await api("POST", "/api/deals", { items });
+    // Submitted — the server won't accept another today. Reset the basket
+    // right away rather than leave the just-submitted items sitting there.
+    basket.clear();
+    renderBasket();
     if (exact) {
       await api("POST", "/api/combos", { name: e.target.name.value.trim(), items });
       toast("Exactly 30! Entered the competition and logged today's deal.");
       setTimeout(() => location.href = "/", 1400);
-    } else if (total() < TARGET) {
+    } else if (deal.total_cents < TARGET && deal.distance_cents > CHEAPEST_ITEM_CENTS) {
       // Credit left on the card — offer to share it (cosmetic: a barcode
       // generated from a real card number, purely for sharing; it doesn't
-      // touch anyone's total or leaderboard standing).
+      // touch anyone's total or leaderboard standing). Skip the prompt if
+      // there's less left than the cheapest item — nothing to stock up on.
       toast(`Deal logged — W$${(deal.distance_cents / 100).toFixed(2)} away from 30.`);
       showCreditShare(deal.distance_cents);
     } else {
@@ -266,14 +278,26 @@ document.getElementById("credit-share-form").addEventListener("submit", e => {
   document.getElementById("barcode-out").innerHTML = renderBarcode(num);
 });
 
-meals = await api("GET", "/api/meals");
-const draft = await api("GET", "/api/basket");
-for (const item of draft.items) basket.set(item.meal_id, item.qty);
-initFloatingBasket({ arena, basketEl, meals, onDrop: addToBasket });
-renderBasket();
+const todayBoard = await api("GET", "/api/deals/today");
+const mine = todayBoard.entries.find(e => e.mine);
 
-const session = await getSession();
-identitySlot.innerHTML = identityLine(session.name || "not set yet");
+if (mine) {
+  document.getElementById("builder-layout").style.display = "none";
+  document.getElementById("locked-msg").innerHTML =
+    `You submitted ${wim(mine.total_cents)} today` +
+    (mine.distance_cents === 0 ? " — exactly 30!" : ` (±W$${(mine.distance_cents / 100).toFixed(2)} from 30)`) +
+    ` — come back tomorrow to build another basket.`;
+  document.getElementById("locked-view").style.display = "block";
+} else {
+  meals = await api("GET", "/api/meals");
+  const draft = await api("GET", "/api/basket");
+  for (const item of draft.items) basket.set(item.meal_id, item.qty);
+  initFloatingBasket({ arena, basketEl, meals, onDrop: addToBasket });
+  renderBasket();
+
+  const session = await getSession();
+  identitySlot.innerHTML = identityLine(session.name || "not set yet");
+}
 </script>
 </body>
 </html>

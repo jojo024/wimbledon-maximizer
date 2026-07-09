@@ -81,6 +81,31 @@ for context on each item. Check items off as they ship.
       the default (no search) list is capped to 12 so a large pool doesn't produce
       an unusably long list — the search box is how you find the rest
 
+## v0.3.5 — Tip reactions, admin edit powers, one deal per day
+
+- [x] Tips reactions generalized from a single upvote to six independent toggles:
+      up, down, fire, heart, laugh, cry — several can be active at once on the same
+      tip. Sort score is up-minus-down; the other four are flavor, not ranking
+- [x] Admin can now edit (not just delete) comments and tips — inline author/text
+      fields + Save, matching the existing meals/combos pattern
+- [x] Daily Deal is strictly one submission per day — resubmitting the same day now
+      400s ("come back tomorrow") instead of silently correcting the total; enforced
+      by the `UNIQUE(voter_id, deal_date)` constraint itself (no separate check-then-
+      insert race), and the client shows a locked "already submitted" view on return
+- [x] Basket resets immediately after a successful submission (both client-side and
+      the server-side draft) rather than leaving the just-submitted items visible
+
+## v0.3.6 — Honourable mentions, barcode realism
+
+- [x] Admin can create "honourable mention" combos directly (still exactly 30
+      Wimbledons — the joke needs a real combination) — funky, admin-curated,
+      shown in their own section on the leaderboard, never counted in the ranking
+      or the top-rated sort
+- [x] Credit-share barcode redrawn denser (1px gaps, 5 bar segments/char, narrow-
+      dominant widths) to actually read as a barcode, per a reference photo
+- [x] Credit-share popup only appears when leftover credit exceeds W$1.05 (the
+      cheapest catalog item) — below that there's nothing left to "stock up" on
+
 ## v0.4.0 — Seasons and polish
 
 - [ ] Season table + weekly rollover job; archive past seasons
@@ -97,8 +122,24 @@ for context on each item. Check items off as they ship.
       comparison, no rate limiting on admin endpoints). SQL injection surface,
       XSS escaping, CORS, and CSRF all came back clean.
 - [x] Deployment-topology risks from the review — resolved in v0.3.2 above.
+- [ ] **Bug:** Basket Builder meter only reaches 50% width at exactly 30 Wimbledons
+      (it visualizes up to `TARGET * 2` = 60, so a modest basket looks like it
+      "stops 1/3 way through" instead of reflecting progress toward 30 directly).
+      Reported with a suggested fix: rescale so the bar fills 0→100% as you
+      approach 30 (not 60), keep the green-at-exact / different-color-when-over
+      treatment that already exists (`.meter.exact`/`.meter.over` in style.css).
+      Not yet fixed — flagged for a deliberate rescale, not a quick patch, since
+      "over 30" then needs its own visual language once 30 is the top of the bar.
 - [ ] pytest suite: combo total validation, admin auth, snapshot integrity, cascade deletes
 - [ ] GitHub Actions CI: syntax + import check on push
+
+## Done (v0.3.6)
+
+- [x] Honourable-mention combos, denser barcode rendering, credit-share threshold
+
+## Done (v0.3.5)
+
+- [x] Six-reaction tips, admin edit for comments/tips, one-deal-per-day + basket reset
 
 ## Done (v0.3.4)
 

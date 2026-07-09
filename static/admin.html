@@ -10,7 +10,7 @@
 <body>
 <main>
   <h2 class="section-title">Admin console</h2>
-  <p class="section-sub">Edit the entire database: meals, combos, ratings, and comments.</p>
+  <p class="section-sub">Edit the entire database: meals, combos, ratings, comments, daily deals, and tips.</p>
 
   <div class="panel" id="login-panel" style="max-width:420px">
     <label class="f">Admin key
@@ -123,11 +123,28 @@ async function loadTab() {
     </table>`;
   } else if (tab === "combos") {
     const combos = await api("GET", "/api/combos");
-    content.innerHTML = `<table class="admin">
+    content.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <span class="section-sub" style="margin:0">Funky admin-only combos flagged "honourable mention" — shown separately on the leaderboard, never counted in the ranking.</span>
+        <button class="btn btn-sm" data-act="toggle-new-combo" style="white-space:nowrap">+ New honourable mention</button>
+      </div>
+      <div class="item-editor" id="new-combo-form" style="display:none;margin-bottom:18px;padding-bottom:14px;border-bottom:1px dashed rgba(139,92,246,0.25)">
+        <div style="display:flex;gap:10px;margin-bottom:10px">
+          <input id="new-combo-name" placeholder="Combo name" style="flex:1">
+          <input id="new-combo-author" placeholder="Author (e.g. Admin)" style="flex:1">
+        </div>
+        <div class="ie-rows">${itemRow()}</div>
+        <div class="ie-foot">
+          <button class="btn btn-sm" data-act="add-item">+ Add item</button>
+          <span class="ie-total"></span>
+          <button class="btn btn-sm btn-green" data-act="save-items" disabled>Create</button>
+        </div>
+      </div>
+      <table class="admin">
       <tr><th>ID</th><th>Name</th><th>Author</th><th>Items</th><th>Rating</th><th></th></tr>
       ${combos.map(c => `<tr data-id="${c.id}">
         <td>${c.id}</td>
-        <td><input value="${esc(c.name)}" data-f="name"></td>
+        <td>${c.honourable ? `<span class="honourable-tag" title="Honourable mention — not part of the ranking">&#127942;</span>` : ""}<input value="${esc(c.name)}" data-f="name"></td>
         <td><input value="${esc(c.author)}" data-f="author"></td>
         <td>${c.items.map(i => `${esc(i.emoji)}${i.qty > 1 ? "&times;" + i.qty : ""}`).join(" ")}</td>
         <td>${c.rating_avg ? c.rating_avg.toFixed(1) : "–"} (${c.rating_count})</td>
@@ -155,11 +172,18 @@ async function loadTab() {
   } else if (tab === "tips") {
     const tips = await api("GET", "/api/admin/tips", undefined, KEY);
     content.innerHTML = tips.length ? `<table class="admin">
-      <tr><th>ID</th><th>Author</th><th>Text</th><th>Votes</th><th>When</th><th></th></tr>
+      <tr><th>ID</th><th>Author</th><th>Text</th><th>Score</th><th>Reactions</th><th>When</th><th></th></tr>
       ${tips.map(t => `<tr data-id="${t.id}">
-        <td>${t.id}</td><td>${esc(t.author)}</td><td>${esc(t.text)}</td>
-        <td>${t.votes}</td><td>${esc(t.created_at)}</td>
-        <td><button class="btn btn-sm btn-danger" data-act="del-tip">Delete</button></td>
+        <td>${t.id}</td>
+        <td><input value="${esc(t.author)}" data-f="author"></td>
+        <td><input value="${esc(t.text)}" data-f="text"></td>
+        <td>${t.score > 0 ? "+" + t.score : t.score}</td>
+        <td>${t.total_reactions}</td>
+        <td>${esc(t.created_at)}</td>
+        <td style="white-space:nowrap">
+          <button class="btn btn-sm" data-act="save-tip">Save</button>
+          <button class="btn btn-sm btn-danger" data-act="del-tip">Delete</button>
+        </td>
       </tr>`).join("")}
     </table>` : `<span class="empty-hint">No tips in the database.</span>`;
   } else {
@@ -167,9 +191,14 @@ async function loadTab() {
     content.innerHTML = comments.length ? `<table class="admin">
       <tr><th>ID</th><th>Combo</th><th>Author</th><th>Text</th><th>When</th><th></th></tr>
       ${comments.map(c => `<tr data-id="${c.id}">
-        <td>${c.id}</td><td>${esc(c.combo_name)}</td><td>${esc(c.author)}</td>
-        <td>${esc(c.text)}</td><td>${esc(c.created_at)}</td>
-        <td><button class="btn btn-sm btn-danger" data-act="del-comment">Delete</button></td>
+        <td>${c.id}</td><td>${esc(c.combo_name)}</td>
+        <td><input value="${esc(c.author)}" data-f="author"></td>
+        <td><input value="${esc(c.text)}" data-f="text"></td>
+        <td>${esc(c.created_at)}</td>
+        <td style="white-space:nowrap">
+          <button class="btn btn-sm" data-act="save-comment">Save</button>
+          <button class="btn btn-sm btn-danger" data-act="del-comment">Delete</button>
+        </td>
       </tr>`).join("")}
     </table>` : `<span class="empty-hint">No comments in the database.</span>`;
   }
@@ -186,12 +215,21 @@ content.addEventListener("click", async e => {
   if (!btn) return;
   const act = btn.dataset.act;
 
-  // combo item-editor actions live inside the .combo-editor row
+  if (act === "toggle-new-combo") {
+    const form = document.getElementById("new-combo-form");
+    const show = form.style.display === "none";
+    form.style.display = show ? "block" : "none";
+    if (show) recomputeEditor(form);
+    return;
+  }
+
+  // combo item-editor actions live either inside a .combo-editor row (editing
+  // an existing combo's items) or the standalone #new-combo-form (creating a
+  // new honourable-mention combo from scratch) — same markup, same handlers.
   if (act === "add-item" || act === "rm-item" || act === "save-items") {
     e.preventDefault();
-    const editorRow = btn.closest("tr.combo-editor");
-    const cid = Number(editorRow.dataset.editor);
-    const editor = editorRow.querySelector(".item-editor");
+    const editor = btn.closest(".item-editor");
+    const editorRow = btn.closest("tr.combo-editor"); // absent when creating a new combo
     if (act === "add-item") {
       editor.querySelector(".ie-rows").insertAdjacentHTML("beforeend", itemRow());
       recomputeEditor(editor);
@@ -206,8 +244,17 @@ content.addEventListener("click", async e => {
         qty: Number(r.querySelector(".ie-qty").value),
       }));
       try {
-        await api("PUT", `/api/admin/combos/${cid}/items`, { items }, KEY);
-        toast("Combo items saved"); loadTab();
+        if (editorRow) {
+          const cid = Number(editorRow.dataset.editor);
+          await api("PUT", `/api/admin/combos/${cid}/items`, { items }, KEY);
+          toast("Combo items saved"); loadTab();
+        } else {
+          const name = document.getElementById("new-combo-name").value.trim();
+          const author = document.getElementById("new-combo-author").value.trim();
+          if (!name || !author) { toast("Name and author are required", true); return; }
+          await api("POST", "/api/admin/combos", { name, author, items }, KEY);
+          toast("Honourable mention created"); loadTab();
+        }
       } catch (err) { toast(err.message, true); }
     }
     return;
@@ -245,6 +292,10 @@ content.addEventListener("click", async e => {
         if (!confirm("Delete this combo with its ratings and comments?")) return;
         await api("DELETE", `/api/admin/combos/${id}`, undefined, KEY);
         toast("Combo deleted"); loadTab(); break;
+      case "save-comment":
+        await api("PUT", `/api/admin/comments/${id}`,
+          { author: val("author"), text: val("text") }, KEY);
+        toast("Comment saved"); break;
       case "del-comment":
         await api("DELETE", `/api/admin/comments/${id}`, undefined, KEY);
         toast("Comment deleted"); loadTab(); break;
@@ -252,6 +303,10 @@ content.addEventListener("click", async e => {
         if (!confirm("Delete this daily deal entry?")) return;
         await api("DELETE", `/api/admin/deals/${id}`, undefined, KEY);
         toast("Deal deleted"); loadTab(); break;
+      case "save-tip":
+        await api("PUT", `/api/admin/tips/${id}`,
+          { author: val("author"), text: val("text") }, KEY);
+        toast("Tip saved"); break;
       case "del-tip":
         await api("DELETE", `/api/admin/tips/${id}`, undefined, KEY);
         toast("Tip deleted"); loadTab(); break;

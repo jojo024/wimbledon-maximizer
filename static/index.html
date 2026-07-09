@@ -24,6 +24,12 @@
   <p class="empty-hint" id="empty" style="display:none;text-align:center;margin-top:40px">
     No combos yet — be the first to spend 30 Wimbledons perfectly.
   </p>
+
+  <section id="honourable-section" style="display:none;margin-top:48px">
+    <h2 class="section-title" style="text-align:center">&#127942; Honourable Mentions</h2>
+    <p class="section-sub" style="text-align:center">Funky 30-Wimbledon combinations, admin-curated for laughs — not part of the competition ranking.</p>
+    <div class="combo-grid" id="honourable-grid"></div>
+  </section>
 </main>
 
 <script type="module">
@@ -36,9 +42,11 @@ let combos = [];
 let session = { name: "" };
 let sortMode = "top";
 const grid = document.getElementById("grid");
+const honourableGrid = document.getElementById("honourable-grid");
+const honourableSection = document.getElementById("honourable-section");
 
 function sortCombos() {
-  const arr = [...combos];
+  const arr = combos.filter(c => !c.honourable);
   if (sortMode === "top") {
     arr.sort((a, b) => b.rating_avg - a.rating_avg || b.rating_count - a.rating_count || b.id - a.id);
   } else {
@@ -47,11 +55,10 @@ function sortCombos() {
   return arr;
 }
 
-function render() {
-  const arr = sortCombos();
-  document.getElementById("empty").style.display = arr.length ? "none" : "block";
-  grid.innerHTML = arr.map((c, i) => `
-    <article class="card" style="animation-delay:${(i * 0.7) % 4}s;animation-duration:${5.5 + (i % 3)}s" data-id="${c.id}">
+function cardHtml(c, i) {
+  return `
+    <article class="card${c.honourable ? " honourable" : ""}" style="animation-delay:${(i * 0.7) % 4}s;animation-duration:${5.5 + (i % 3)}s" data-id="${c.id}">
+      ${c.honourable ? `<div class="honourable-badge">&#127942; Honourable mention</div>` : ""}
       <h3>${esc(c.name)}</h3>
       <div class="byline">by ${esc(c.author)}</div>
       <div class="items">
@@ -76,10 +83,22 @@ function render() {
           <button class="btn btn-sm btn-green">Post</button>
         </form>
       </div>
-    </article>`).join("");
+    </article>`;
 }
 
-function cardFor(id) { return grid.querySelector(`.card[data-id="${id}"]`); }
+function render() {
+  const arr = sortCombos();
+  document.getElementById("empty").style.display = arr.length ? "none" : "block";
+  grid.innerHTML = arr.map(cardHtml).join("");
+
+  const honourable = combos.filter(c => c.honourable).sort((a, b) => b.id - a.id);
+  honourableSection.style.display = honourable.length ? "block" : "none";
+  honourableGrid.innerHTML = honourable.map(cardHtml).join("");
+}
+
+// Cards live in either grid — combo ids are unique across both, so a single
+// document-wide lookup covers whichever one a given combo rendered into.
+function cardFor(id) { return document.querySelector(`.card[data-id="${id}"]`); }
 
 function topCommentHtml(tc) {
   return `<div class="top-comment">
@@ -149,7 +168,7 @@ async function loadComments(card, id) {
     : `<span class="empty-hint">No comments yet.</span>`;
 }
 
-grid.addEventListener("click", async e => {
+document.addEventListener("click", async e => {
   const card = e.target.closest(".card");
   if (!card) return;
   const id = Number(card.dataset.id);
@@ -187,9 +206,10 @@ grid.addEventListener("click", async e => {
   }
 });
 
-grid.addEventListener("submit", async e => {
-  e.preventDefault();
+document.addEventListener("submit", async e => {
   const card = e.target.closest(".card");
+  if (!card) return;
+  e.preventDefault();
   const id = Number(card.dataset.id);
   const text = e.target.text.value.trim();
   if (!text) return;
@@ -197,7 +217,7 @@ grid.addEventListener("submit", async e => {
   if (!name) return;
   if (name !== session.name) {
     session.name = name;
-    grid.querySelectorAll(".identity-line b").forEach(b => b.textContent = name);
+    document.querySelectorAll(".identity-line b").forEach(b => b.textContent = name);
   }
   try {
     await api("POST", `/api/combos/${id}/comments`, { text });
