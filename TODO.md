@@ -106,6 +106,13 @@ for context on each item. Check items off as they ship.
 - [x] Credit-share popup only appears when leftover credit exceeds W$1.05 (the
       cheapest catalog item) — below that there's nothing left to "stock up" on
 
+## v0.3.7 — Honourable-mention picker fix
+
+- [x] Replace free-text emoji/name/price/qty entry in the admin "+ New honourable
+      mention" form with a meal picker (`<select>` of the live pool + qty, copying
+      emoji/name/price_cents straight from the meal record) — fixes a live 422 on
+      wmax.shop caused by a blank emoji field and the clunkiness the user reported
+
 ## v0.4.0 — Seasons and polish
 
 - [ ] Season table + weekly rollover job; archive past seasons
@@ -132,6 +139,10 @@ for context on each item. Check items off as they ship.
       "over 30" then needs its own visual language once 30 is the top of the bar.
 - [ ] pytest suite: combo total validation, admin auth, snapshot integrity, cascade deletes
 - [ ] GitHub Actions CI: syntax + import check on push
+
+## Done (v0.3.7)
+
+- [x] Meal-picker replaces free-text entry in the honourable-mention admin form
 
 ## Done (v0.3.6)
 

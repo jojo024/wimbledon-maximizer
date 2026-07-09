@@ -37,6 +37,8 @@ renderNav("/admin");
 
 let KEY = sessionStorage.getItem("wim_admin_key") || "";
 let tab = "meals";
+let meals = [];
+let newComboItems = [];
 const content = document.getElementById("tab-content");
 
 async function unlock(key) {
@@ -87,6 +89,39 @@ function itemEditor(items) {
   </div>`;
 }
 
+function mealOptions() {
+  return meals.map(m => `<option value="${m.id}">${esc(m.emoji)} ${esc(m.name)} — ${fmtW(m.price_cents)}</option>`).join("");
+}
+
+// Render the picked-items list for the new honourable-mention combo form,
+// mirroring builder.html's basket-row/qty-controls pattern (dec/inc buttons,
+// not typable inputs, so nothing loses focus on re-render).
+function renderNewComboRows() {
+  const rowsEl = document.getElementById("new-combo-rows");
+  const totalEl = document.getElementById("new-combo-total");
+  const createBtn = document.querySelector('#new-combo-form [data-act="create-combo"]');
+  rowsEl.innerHTML = newComboItems.length === 0
+    ? `<span class="empty-hint">No items picked yet.</span>`
+    : newComboItems.map((it, idx) => `<div class="basket-row" data-idx="${idx}">
+        <span class="emoji">${esc(it.emoji)}</span>
+        <span class="bname">${esc(it.name)}</span>
+        <span class="qty-controls">
+          <button type="button" class="qbtn" data-act="pick-dec">&minus;</button>
+          <span>${it.qty}</span>
+          <button type="button" class="qbtn" data-act="pick-inc">+</button>
+        </span>
+        ${fmtW(it.price_cents * it.qty)}
+        <button type="button" class="btn btn-sm btn-danger" data-act="pick-rm" title="Remove">&times;</button>
+      </div>`).join("");
+  const total = newComboItems.reduce((s, it) => s + it.price_cents * it.qty, 0);
+  const off = total - TARGET;
+  totalEl.textContent = off === 0
+    ? `${fmtW(total)} — exactly 30 Wimbledons`
+    : `${fmtW(total)} Wimbledons (${off > 0 ? "+" : ""}${fmtW(off)})`;
+  totalEl.classList.toggle("ok", off === 0);
+  createBtn.disabled = off !== 0;
+}
+
 // Collect {price_cents, qty} and update the live total + save button for one editor.
 function recomputeEditor(editor) {
   let total = 0;
@@ -122,22 +157,30 @@ async function loadTab() {
         </td></tr>`).join("")}
     </table>`;
   } else if (tab === "combos") {
-    const combos = await api("GET", "/api/combos");
+    const [combos, allMeals] = await Promise.all([
+      api("GET", "/api/combos"), api("GET", "/api/meals"),
+    ]);
+    meals = allMeals;
+    newComboItems = [];
     content.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
         <span class="section-sub" style="margin:0">Funky admin-only combos flagged "honourable mention" — shown separately on the leaderboard, never counted in the ranking.</span>
         <button class="btn btn-sm" data-act="toggle-new-combo" style="white-space:nowrap">+ New honourable mention</button>
       </div>
-      <div class="item-editor" id="new-combo-form" style="display:none;margin-bottom:18px;padding-bottom:14px;border-bottom:1px dashed rgba(139,92,246,0.25)">
+      <div id="new-combo-form" style="display:none;margin-bottom:18px;padding-bottom:14px;border-bottom:1px dashed rgba(139,92,246,0.25)">
         <div style="display:flex;gap:10px;margin-bottom:10px">
           <input id="new-combo-name" placeholder="Combo name" style="flex:1">
           <input id="new-combo-author" placeholder="Author (e.g. Admin)" style="flex:1">
         </div>
-        <div class="ie-rows">${itemRow()}</div>
+        <div style="display:flex;gap:8px;margin-bottom:12px">
+          <select id="new-combo-picker" style="flex:1">${mealOptions()}</select>
+          <input id="new-combo-qty" type="number" min="1" max="20" value="1" style="width:70px" title="Quantity">
+          <button type="button" class="btn btn-sm" data-act="pick-add">+ Add</button>
+        </div>
+        <div class="basket-list" id="new-combo-rows"></div>
         <div class="ie-foot">
-          <button class="btn btn-sm" data-act="add-item">+ Add item</button>
-          <span class="ie-total"></span>
-          <button class="btn btn-sm btn-green" data-act="save-items" disabled>Create</button>
+          <span class="ie-total" id="new-combo-total"></span>
+          <button class="btn btn-sm btn-green" data-act="create-combo" disabled>Create</button>
         </div>
       </div>
       <table class="admin">
@@ -219,17 +262,17 @@ content.addEventListener("click", async e => {
     const form = document.getElementById("new-combo-form");
     const show = form.style.display === "none";
     form.style.display = show ? "block" : "none";
-    if (show) recomputeEditor(form);
+    if (show) { newComboItems = []; renderNewComboRows(); }
     return;
   }
 
-  // combo item-editor actions live either inside a .combo-editor row (editing
-  // an existing combo's items) or the standalone #new-combo-form (creating a
-  // new honourable-mention combo from scratch) — same markup, same handlers.
+  // combo item-editor actions here only ever apply to an EXISTING combo's
+  // items (inside a tr.combo-editor row) — creating a new honourable mention
+  // uses the meal-picker actions below instead.
   if (act === "add-item" || act === "rm-item" || act === "save-items") {
     e.preventDefault();
     const editor = btn.closest(".item-editor");
-    const editorRow = btn.closest("tr.combo-editor"); // absent when creating a new combo
+    const editorRow = btn.closest("tr.combo-editor");
     if (act === "add-item") {
       editor.querySelector(".ie-rows").insertAdjacentHTML("beforeend", itemRow());
       recomputeEditor(editor);
@@ -244,19 +287,54 @@ content.addEventListener("click", async e => {
         qty: Number(r.querySelector(".ie-qty").value),
       }));
       try {
-        if (editorRow) {
-          const cid = Number(editorRow.dataset.editor);
-          await api("PUT", `/api/admin/combos/${cid}/items`, { items }, KEY);
-          toast("Combo items saved"); loadTab();
-        } else {
-          const name = document.getElementById("new-combo-name").value.trim();
-          const author = document.getElementById("new-combo-author").value.trim();
-          if (!name || !author) { toast("Name and author are required", true); return; }
-          await api("POST", "/api/admin/combos", { name, author, items }, KEY);
-          toast("Honourable mention created"); loadTab();
-        }
+        const cid = Number(editorRow.dataset.editor);
+        await api("PUT", `/api/admin/combos/${cid}/items`, { items }, KEY);
+        toast("Combo items saved"); loadTab();
       } catch (err) { toast(err.message, true); }
     }
+    return;
+  }
+
+  // meal-picker actions for creating a new honourable-mention combo — emoji,
+  // name, and price always come from the selected meal record, never typed.
+  if (act === "pick-add") {
+    e.preventDefault();
+    const sel = document.getElementById("new-combo-picker");
+    const qtyInput = document.getElementById("new-combo-qty");
+    const mealId = Number(sel.value);
+    const qty = Math.max(1, Number(qtyInput.value) || 1);
+    const meal = meals.find(m => m.id === mealId);
+    if (!meal) return;
+    const existing = newComboItems.find(it => it.meal_id === mealId);
+    if (existing) existing.qty += qty;
+    else newComboItems.push({ meal_id: mealId, emoji: meal.emoji, name: meal.name, price_cents: meal.price_cents, qty });
+    qtyInput.value = 1;
+    renderNewComboRows();
+    return;
+  }
+  if (act === "pick-dec" || act === "pick-inc" || act === "pick-rm") {
+    e.preventDefault();
+    const idx = Number(btn.closest(".basket-row").dataset.idx);
+    if (act === "pick-inc") newComboItems[idx].qty++;
+    else if (act === "pick-dec") {
+      newComboItems[idx].qty--;
+      if (newComboItems[idx].qty <= 0) newComboItems.splice(idx, 1);
+    } else newComboItems.splice(idx, 1);
+    renderNewComboRows();
+    return;
+  }
+  if (act === "create-combo") {
+    e.preventDefault();
+    const name = document.getElementById("new-combo-name").value.trim();
+    const author = document.getElementById("new-combo-author").value.trim();
+    if (!name || !author) { toast("Name and author are required", true); return; }
+    const items = newComboItems.map(it => ({
+      emoji: it.emoji, meal_name: it.name, price_cents: it.price_cents, qty: it.qty,
+    }));
+    try {
+      await api("POST", "/api/admin/combos", { name, author, items }, KEY);
+      toast("Honourable mention created"); loadTab();
+    } catch (err) { toast(err.message, true); }
     return;
   }
 

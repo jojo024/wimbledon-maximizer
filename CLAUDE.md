@@ -66,7 +66,7 @@ Frontend is plain ES modules, no build step, no external requests (works fully o
 - `static/players.html` — today's ranking (closest to 30) and all-time standings (average distance since first submission, missed days counted as W$0, current streak).
 - `static/tips.html` — post a tip (identity-locked, same as everywhere else); react with any of six independent toggles, sorted by score (up minus down), live-patched via `connectFeed()`.
 - `static/meals.html` — add-meal form with a large food/drink emoji picker + meal pool listing.
-- `static/admin.html` — admin key kept in `sessionStorage` (`wim_admin_key`), verified via `/api/admin/verify`; five tabs (Meals / Combos / Daily Deals / Comments / Tips) with inline-editable tables (comments and tips are now edit-in-place, not delete-only). The Combos tab also has a "+ New honourable mention" panel that reuses the combo item-editor markup to create a combo from scratch.
+- `static/admin.html` — admin key kept in `sessionStorage` (`wim_admin_key`), verified via `/api/admin/verify`; five tabs (Meals / Combos / Daily Deals / Comments / Tips) with inline-editable tables (comments and tips are now edit-in-place, not delete-only). The Combos tab also has a "+ New honourable mention" panel with a meal picker (`<select>` over the live meal pool + qty, `pick-add`/`pick-inc`/`pick-dec`/`pick-rm`/`create-combo` actions) instead of free-text entry — emoji/name/price always come from an existing `meals` row, never retyped. Editing an *already-submitted* combo's items still uses the original free-text item editor (`itemEditor()`/`itemRow()`, `add-item`/`rm-item`/`save-items` actions), since those rows are historical snapshots that may no longer match any current meal.
 
 ## Workflow
 

@@ -262,8 +262,8 @@ ratings and comments, admin console, W$ glyph, purple/green futuristic theme.
    toggle, excluded from `sortCombos()`); rating/commenting still work on them via
    the same delegated listeners (moved from `grid`-scoped to `document`-scoped so
    both grids share one set of handlers). `static/admin.html` gets a "+ New
-   honourable mention" panel reusing the existing combo item-editor markup, branching
-   on whether a `tr.combo-editor` ancestor exists (editing) or not (creating).
+   honourable mention" panel with a meal picker (see v0.3.7 — the original free-text
+   entry shipped in this version was replaced almost immediately).
 2. **Barcode density** — `static/wim.js` (`renderBarcode()`): gap between bars
    1px → was 3px, 5 bar segments per character (was 3), width range narrowed to
    1-4px and narrow-dominant. Still a deterministic cosmetic pattern, not a real
@@ -271,6 +271,28 @@ ratings and comments, admin console, W$ glyph, purple/green futuristic theme.
 3. **Credit-share threshold** — `static/builder.html`: the popup only fires when
    `distance_cents > 105`; otherwise the normal under-30 redirect happens with no
    prompt.
+
+> **Status:** Shipped.
+
+## v0.3.7 — Honourable-mention picker fix
+
+| # | Item | Effort | Why now |
+|---|------|--------|---------|
+| 1 | Meal picker replaces free-text item entry in the honourable-mention form | S | Live 422 on wmax.shop — an empty/mistyped emoji field violates `SnapshotItemIn`'s `min_length=1`; user reported the free-text form as clunky anyway |
+
+### Item details
+
+1. **Meal picker** — `static/admin.html`. The "+ New honourable mention" panel's
+   item entry (free-text emoji/name/price/qty inputs, the same `itemRow()` used for
+   editing an *existing* combo's items) is replaced by a `<select>` of the live meal
+   pool (`GET /api/meals`) + a quantity field + "+ Add"; picking a meal copies its
+   `emoji`/`name`/`price_cents` straight from the meal record into a `newComboItems`
+   array — nothing is retyped, so the exact bug class that caused the 422 (a blank
+   emoji cell) can't happen. Picked items render with `builder.html`'s
+   `.basket-row`/`.qty-controls` dec/inc pattern instead of typable inputs. Editing
+   an *existing* combo's items still uses the original free-text `itemEditor()` —
+   unchanged, since those rows can legitimately hold a historical snapshot that no
+   longer matches any current meal.
 
 > **Status:** Shipped.
 
