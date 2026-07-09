@@ -92,7 +92,16 @@ export async function api(method, url, body, adminKey) {
   });
   if (!res.ok) {
     let msg = `${res.status}`;
-    try { msg = (await res.json()).detail || msg; } catch { /* keep status */ }
+    try {
+      const detail = (await res.json()).detail;
+      if (typeof detail === "string") msg = detail;
+      // FastAPI/pydantic validation errors (422) return `detail` as a list of
+      // {loc, msg, type} objects, not a string — join their messages instead
+      // of letting new Error() stringify the array into "[object Object],...".
+      else if (Array.isArray(detail) && detail.length) {
+        msg = detail.map(d => d.msg || JSON.stringify(d)).join("; ");
+      }
+    } catch { /* keep status */ }
     throw new Error(msg);
   }
   return res.status === 204 ? null : res.json();

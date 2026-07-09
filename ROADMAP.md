@@ -274,11 +274,13 @@ ratings and comments, admin console, W$ glyph, purple/green futuristic theme.
 
 > **Status:** Shipped.
 
-## v0.3.7 — Honourable-mention picker fix
+## v0.3.7 — Honourable-mention picker fix, ticker banner, readable errors
 
 | # | Item | Effort | Why now |
 |---|------|--------|---------|
 | 1 | Meal picker replaces free-text item entry in the honourable-mention form | S | Live 422 on wmax.shop — an empty/mistyped emoji field violates `SnapshotItemIn`'s `min_length=1`; user reported the free-text form as clunky anyway |
+| 2 | Fix `[object Object]` toast on validation errors | XS | FastAPI/pydantic 422s return `detail` as a list of `{loc, msg, type}` objects, not a string — `api()` only ever handled the string case, so any 422 anywhere in the app rendered unreadable |
+| 3 | Scrolling ticker banner on Tips & Tricks | S | User-approved UX idea: top tips crawl across the screen like a news ticker, separate from the normal reactable list below |
 
 ### Item details
 
@@ -293,6 +295,19 @@ ratings and comments, admin console, W$ glyph, purple/green futuristic theme.
    an *existing* combo's items still uses the original free-text `itemEditor()` —
    unchanged, since those rows can legitimately hold a historical snapshot that no
    longer matches any current meal.
+2. **Readable validation errors** — `static/wim.js` (`api()`). `detail` is now
+   type-checked: a string is used as-is (the shape every hand-written
+   `HTTPException(400, "...")` in the app already returns), and an array (the shape
+   pydantic's automatic 422s return) has its per-field `msg`s joined instead of
+   being handed straight to `new Error()`, which stringified the array into
+   `"[object Object],[object Object]"`.
+3. **Ticker banner** — `static/tips.html`, `static/style.css`. A `.ticker-wrap`
+   above the normal tip list holds the top `TICKER_SIZE` (8) tips by score, each
+   rendered once and then duplicated so a CSS `@keyframes ticker` animation
+   (`translateX(0)` → `translateX(-50%)`, linear, infinite) loops seamlessly;
+   paused on hover. `renderTicker()` is keyed on the joined ids of the visible
+   top-N so an unrelated reaction elsewhere (which still calls `render()`) doesn't
+   restart the scroll mid-loop — only a real change to the top-N set/order does.
 
 > **Status:** Shipped.
 

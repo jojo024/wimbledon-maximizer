@@ -106,12 +106,17 @@ for context on each item. Check items off as they ship.
 - [x] Credit-share popup only appears when leftover credit exceeds W$1.05 (the
       cheapest catalog item) — below that there's nothing left to "stock up" on
 
-## v0.3.7 — Honourable-mention picker fix
+## v0.3.7 — Honourable-mention picker fix, ticker banner, readable errors
 
 - [x] Replace free-text emoji/name/price/qty entry in the admin "+ New honourable
       mention" form with a meal picker (`<select>` of the live pool + qty, copying
       emoji/name/price_cents straight from the meal record) — fixes a live 422 on
       wmax.shop caused by a blank emoji field and the clunkiness the user reported
+- [x] Fix `api()` in `wim.js` rendering pydantic 422 validation errors as
+      `[object Object]` — `detail` is a list of `{loc, msg, type}` objects on a
+      validation error, not a string like every hand-written `HTTPException`
+- [x] Scrolling ticker banner on `/tips`: top tips by score crawl continuously
+      above the normal reactable list, pauses on hover, seamless CSS-only loop
 
 ## v0.4.0 — Seasons and polish
 
@@ -142,7 +147,8 @@ for context on each item. Check items off as they ship.
 
 ## Done (v0.3.7)
 
-- [x] Meal-picker replaces free-text entry in the honourable-mention admin form
+- [x] Meal-picker replaces free-text entry in the honourable-mention admin form,
+      readable validation-error toasts, Tips & Tricks scrolling ticker banner
 
 ## Done (v0.3.6)
 

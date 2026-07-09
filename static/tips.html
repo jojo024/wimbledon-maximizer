@@ -12,6 +12,10 @@
   <h2 class="section-title">Tips &amp; Tricks</h2>
   <p class="section-sub">Share what's helped you maximize your Wimbledons. React to the ones that worked (or didn't) for you — best tips rise to the top by score (&#9650; minus &#9660;).</p>
 
+  <div class="ticker-wrap" id="ticker" style="display:none">
+    <div class="ticker-track" id="ticker-track"></div>
+  </div>
+
   <div class="panel" style="max-width:640px;margin:0 auto 24px">
     <form id="tip-form" style="display:flex;flex-direction:column;gap:10px">
       <textarea name="text" placeholder="Share a tip…" required maxlength="500" rows="3"></textarea>
@@ -39,9 +43,36 @@ const REACTIONS = [
 let tips = [];
 const listEl = document.getElementById("tip-list");
 const identitySlot = document.getElementById("identity-slot");
+const tickerWrap = document.getElementById("ticker");
+const tickerTrack = document.getElementById("ticker-track");
+
+const TICKER_SIZE = 8;
+let lastTickerKey = "";
 
 function sortTips() {
   tips.sort((a, b) => b.score - a.score || b.id - a.id);
+}
+
+function truncate(s, n) {
+  return s.length > n ? s.slice(0, n - 1) + "…" : s;
+}
+
+// Top tips crawl in a separate marquee; keyed on the visible id order so an
+// unrelated reaction elsewhere doesn't restart the scroll mid-loop.
+function renderTicker() {
+  const top = tips.slice(0, TICKER_SIZE);
+  if (!top.length) { tickerWrap.style.display = "none"; return; }
+  const key = top.map(t => t.id).join(",");
+  tickerWrap.style.display = "block";
+  if (key === lastTickerKey) return;
+  lastTickerKey = key;
+  const itemsHtml = top.map((t, i) => `
+    <span class="ticker-item">
+      <span class="t-rank">#${i + 1}</span>
+      <span class="t-score">${t.score > 0 ? "+" : ""}${t.score}</span>
+      <span class="t-text">${esc(truncate(t.text, 90))}</span>
+    </span>`).join("");
+  tickerTrack.innerHTML = itemsHtml + itemsHtml;
 }
 
 function reactionBar(t) {
@@ -59,6 +90,7 @@ function render() {
           <div class="ctext"><span class="cauthor">${esc(t.author)}</span>${esc(t.text)}</div>
         </div>`).join("")
     : `<span class="empty-hint">No tips yet — be the first to share one.</span>`;
+  renderTicker();
 }
 
 listEl.addEventListener("click", async e => {
