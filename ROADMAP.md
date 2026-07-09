@@ -114,6 +114,51 @@ ratings and comments, admin console, W$ glyph, purple/green futuristic theme.
 
 > **Status:** Shipped.
 
+## v0.3.2 — Internet deployment hardening
+
+| # | Item | Effort | Why now |
+|---|------|--------|---------|
+| 1 | Resolve the v0.3.1 security review's deployment-topology findings | M | User wants to deploy on the internet (IONOS VPS + domain); those findings become live risks the moment this leaves a LAN |
+| 2 | Caddy reverse-proxy config + systemd service | S | Needed to actually run this on a VPS: TLS termination and process supervision |
+| 3 | README deployment + update-workflow docs | S | "How do we add features/fix bugs after this is live" needed a concrete answer |
+| 4 | Display name permanently locked, no "change" flow at all | XS | Tightens the v0.3.0 identity lock-down further — a name shouldn't be changeable even via its one dedicated endpoint, once set |
+| 5 | Basket back to dead-center; basket hint emoji fixed | XS | The v0.3.1 physics work makes the "dock to the side" workaround unnecessary; the hint icon was a stray mango, not a basket |
+
+### Item details
+
+1. **Deployment-topology fixes** — `main.py`. First attempt reimplemented
+   `X-Forwarded-For`/`X-Forwarded-Proto` parsing behind a custom `WIM_TRUST_PROXY` flag
+   — testing surfaced two problems: uvicorn's own `ProxyHeadersMiddleware` was *already*
+   doing this (enabled by default, trusting `127.0.0.1`), making the custom flag
+   redundant, and the custom parser took the first entry of a comma-separated
+   `X-Forwarded-For` chain instead of the last — the wrong end, and exactly the kind of
+   bug that lets a client's own spoofed value survive through a real proxy. Removed the
+   custom logic entirely; `client_ip()`/`is_https()` now just read `request.client`/
+   `request.url.scheme` directly, since uvicorn has already resolved them correctly by
+   the time application code runs. The trust boundary is uvicorn's own
+   `forwarded_allow_ips` (`WIM_FORWARDED_ALLOW_IPS` env var, default `127.0.0.1`) —
+   one implementation instead of two. Also added: a global (500) + per-IP (8) cap on
+   `/ws/feed` connections; a startup warning (flushed explicitly — plain `print()`
+   can sit in a stdout buffer indefinitely under uvicorn's event loop) when
+   `WIM_ADMIN_KEY` is left at its default; exact-pinned dependency versions.
+2. **Caddy + systemd** — new `deploy/` directory: `Caddyfile` (reverse proxy, automatic
+   Let's Encrypt TLS, transparent WebSocket upgrade), `wimbledon-maximizer.service`
+   (systemd unit, `Restart=on-failure`, sandboxed to the app directory), and
+   `wimbledon-maximizer.env.example` (real secrets live in the gitignored
+   `.env` copy, not the example).
+3. **Deployment docs** — README § Deploying on the internet: one-time VPS setup, and
+   the ongoing workflow (`git pull && systemctl restart` — `init_db()` runs every
+   startup and only ever adds tables/columns, so a schema change ships the same way
+   as a one-line fix, no separate migration step).
+4. **Permanent names** — `main.py` (`set_session_name` 400s if a name is already set),
+   `static/wim.js` (`identityLine()` dropped its "change" button; `wireIdentityChange()`
+   removed entirely), and the three pages that called it.
+5. **Arena tweaks** — `static/style.css` (`.basket` back to `left: 50%`), `static/wim.js`
+   (scatter rings back to centering on the arena midpoint), `static/builder.html`
+   (hint icon `&#129530;`, the actual 🧺 basket emoji).
+
+> **Status:** Shipped.
+
 ## v0.4.0 — Seasons and polish
 
 | # | Item | Effort | Why now |
@@ -150,20 +195,23 @@ A red-team pass over the whole app, ahead of any deployment beyond a trusted LAN
 - Session forgery — HMAC-signed `voter_id`, checked with `hmac.compare_digest`,
   128 bits of randomness per id. Not forgeable without the secret.
 
-**Deployment-topology risks, flagged but not fixed** (each depends on how/where this
-gets deployed, not something to silently change): `rate_limit()` trusts
-`request.client.host`, which collapses to one shared bucket for everyone behind a
-reverse proxy unless it's configured to forward the real client IP; the session
-cookie has no `secure` flag (fine on plain-HTTP LAN, wrong if ever put behind HTTPS
-without setting it); `/ws/feed` has no per-IP connection cap; and the app binds
-`0.0.0.0` by design (LAN play), which combined with a guessable default admin key
-means changing `WIM_ADMIN_KEY` before exposing this beyond a trusted LAN is
-load-bearing, not optional. Tracked in [TODO.md](TODO.md).
+**Deployment-topology risks, flagged but not fixed at the time:** `rate_limit()`
+trusted `request.client.host` directly, which would collapse to one shared bucket
+for everyone behind a reverse proxy unless configured to forward the real client
+IP; the session cookie had no `secure` flag; `/ws/feed` had no connection cap; the
+app binds `0.0.0.0` by design (LAN play), which combined with a guessable default
+admin key means changing `WIM_ADMIN_KEY` before exposing this beyond a trusted LAN
+is load-bearing, not optional.
+
+> **Update (same day):** all of the above resolved in v0.3.2 once an actual
+> deployment target (VPS + domain) was decided — see that section above. The
+> original plan to fix proxy-trust with a custom `WIM_TRUST_PROXY` flag was itself
+> replaced after testing showed it duplicated (imperfectly) what uvicorn's own
+> `ProxyHeadersMiddleware` already does correctly.
 
 **Verdict:** ready for its intended use case — a locally hosted game among a trusted
-group on a LAN, with the admin key changed from the default. Not hardened for
-unauthenticated exposure to the open internet without addressing the topology risks
-above first.
+group on a LAN, or on the public internet behind the documented Caddy + systemd setup
+with `WIM_ADMIN_KEY` changed from the default.
 
 ## Backlog (unscheduled)
 

@@ -39,7 +39,7 @@
 
 <script type="module">
 import { renderNav, api, esc, fmtW, toast, getSession, ensureNamed,
-         identityLine, wireIdentityChange } from "/static/wim.js";
+         identityLine } from "/static/wim.js";
 renderNav("/meals");
 
 // The full Unicode food & drink block (plus common extensions), not just a
@@ -108,10 +108,6 @@ loadPool();
 const identitySlot = document.getElementById("identity-slot");
 const session = await getSession();
 identitySlot.innerHTML = identityLine(session.name || "not set yet");
-wireIdentityChange(identitySlot, name => {
-  session.name = name;
-  identitySlot.querySelector("b").textContent = name;
-});
 </script>
 </body>
 </html>

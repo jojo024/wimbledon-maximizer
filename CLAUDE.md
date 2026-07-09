@@ -15,6 +15,12 @@ WIM_PORT=9000 python main.py        # custom port
 WIM_ADMIN_KEY=secret python main.py # custom admin key (default: "wimbledon")
 ```
 
+Deploying beyond a trusted LAN: see [README.md § Deploying on the internet](README.md#deploying-on-the-internet)
+and `deploy/` (Caddyfile, systemd unit, env template). Set `WIM_HOST=127.0.0.1`
+together with a reverse proxy on the same host — uvicorn's own `forwarded_allow_ips`
+(default `127.0.0.1`) then trusts that proxy's `X-Forwarded-For`/`Proto` headers
+automatically; never bind `0.0.0.0` while also widening `WIM_FORWARDED_ALLOW_IPS`.
+
 No test suite. Smoke-test after changes:
 
 ```bash
@@ -38,7 +44,8 @@ Delete `wimbledon.db` to reset to seed data.
 - **Combo items are snapshots.** `combo_items` copies name/emoji/price_cents at submission time. Never join combos back to `meals` — meals are editable/deletable and combos must stay historically exact.
 - **Colour scheme is purple/green futuristic dark.** All colours come from the tokens at the top of `static/style.css` (`--purple*`, `--green*`, glass tokens). Do not introduce new hex values outside the token block.
 - **No emojis in docs, commit messages, or code comments.** Food emojis as app data (meal records, picker grid, seed rows) are the product and are fine.
-- **Author identity is always server-derived, never client-supplied.** Every write endpoint (`add_meal`, `add_combo`, `add_comment`, `submit_deal`) pulls the author from `sessions.display_name` via `require_named()`; request models have no `author`/`created_by` field to spoof. Frontend forms show a read-only "Posting as `<name>`" line, never an editable text box.
+- **Author identity is always server-derived, never client-supplied, and permanent once set.** Every write endpoint (`add_meal`, `add_combo`, `add_comment`, `submit_deal`) pulls the author from `sessions.display_name` via `require_named()`; request models have no `author`/`created_by` field to spoof. `/api/session/name` only succeeds once per session (a second call 400s) — there is no "change your name" flow anywhere, frontend or backend. Frontend forms show a read-only "Posting as `<name>`" line, never an editable text box.
+- **Never re-parse `X-Forwarded-For`/`X-Forwarded-Proto` in application code.** uvicorn's own `ProxyHeadersMiddleware` already resolves `request.client`/`request.url.scheme` from those headers, gated to `FORWARDED_ALLOW_IPS` (default `127.0.0.1`) — `client_ip()`/`is_https()` just read the already-resolved values. A second, independent reimplementation is exactly how a subtle bug (e.g. taking the first entry of a comma-separated chain instead of the last, trusted one) turns into a spoofable rate limit or a wrongly-set cookie `Secure` flag.
 
 ## Architecture
 
@@ -53,7 +60,7 @@ Single-process FastAPI app, everything in `main.py`:
 
 Frontend is plain ES modules, no build step, no external requests (works fully offline):
 
-- `static/wim.js` — `WIM_SVG` glyph, `fmtW`/`wim` formatting, `renderNav(active)`, `api()` fetch wrapper, `toast()`, `starBar()`, `esc()` (**always escape user-supplied strings before inserting into innerHTML**), session helpers (`getSession`, `saveName`, `namePrompt(required)`, `ensureNamed()`, `identityLine()`/`wireIdentityChange()` — the read-only "Posting as `<name>`" UI used everywhere instead of an editable author field), `connectFeed()` (auto-reconnecting `/ws/feed` client), and `initFloatingBasket()` (drag-and-drop chip mechanic: chips wander the arena via `requestAnimationFrame` on an outer `.chip-wrap`, bouncing off the arena edges and off the basket itself (an obstacle rect, not just a drop target), while the inner `.float-chip` keeps its own CSS bob animation so the two motions don't fight; dragging one chip also bumps nearby wanderers aside via a velocity impulse).
+- `static/wim.js` — `WIM_SVG` glyph, `fmtW`/`wim` formatting, `renderNav(active)`, `api()` fetch wrapper, `toast()`, `starBar()`, `esc()` (**always escape user-supplied strings before inserting into innerHTML**), session helpers (`getSession`, `saveName`, `namePrompt(required)`, `ensureNamed()`, `identityLine()` — a read-only "Posting as `<name>`" line, no edit affordance since a name is permanent once set), `connectFeed()` (auto-reconnecting `/ws/feed` client), and `initFloatingBasket()` (drag-and-drop chip mechanic: chips wander the arena via `requestAnimationFrame` on an outer `.chip-wrap`, bouncing off the arena edges and off the basket itself (an obstacle rect, not just a drop target), while the inner `.float-chip` keeps its own CSS bob animation so the two motions don't fight; dragging one chip also bumps nearby wanderers aside via a velocity impulse).
 - `static/index.html` — fetches `/api/combos`, renders floating cards, client-side sort (top/new), server-enforced one-vote ratings (`my_rating`), lazy-loaded comments with per-comment upvoting, top-comment snippet surfaced on the card, live-patched via `connectFeed()`.
 - `static/builder.html` — the one basket-building page. `initFloatingBasket()` into a `Map(meal_id -> qty)`; submit always posts to `/api/deals` (any total, today's Daily Deal), and *additionally* posts to `/api/combos` (with a combo name) when the total lands on exactly 3000 cents. Redirects to `/` on an exact hit, `/players` otherwise.
 - `static/players.html` — today's ranking (closest to 30) and all-time standings (average distance since first submission, missed days counted as W$0, current streak).

@@ -153,22 +153,11 @@ export async function ensureNamed() {
   return name;
 }
 
-// "Posting as <name> · change" — read-only identity, no free-text author field
-// anywhere a post is made. The change link deliberately reopens the (skippable)
-// prompt so switching handles is always an explicit, separate action.
+// "Posting as <name>" — read-only identity, no free-text author field anywhere
+// a post is made, and no way to change it once set (the server rejects a
+// second /api/session/name call, so there's deliberately no UI for it either).
 export function identityLine(name) {
-  return `<div class="identity-line">Posting as <b>${esc(name)}</b>
-    <button type="button" class="link-btn" data-change-name>change</button></div>`;
-}
-
-// Wire up any [data-change-name] buttons within `root` to reopen the name prompt.
-export function wireIdentityChange(root, onChanged) {
-  root.querySelectorAll("[data-change-name]").forEach(btn => {
-    btn.onclick = async () => {
-      const name = await namePrompt(false);
-      if (name) onChanged(name);
-    };
-  });
+  return `<div class="identity-line">Posting as <b>${esc(name)}</b></div>`;
 }
 
 // ---------- floating basket (drag-and-drop meal chips) ----------
@@ -184,8 +173,6 @@ export function initFloatingBasket({ arena, basketEl, meals, onDrop }) {
   const wanderers = [];
   const CHIP_W = 100, CHIP_H = 78;
 
-  // The basket now docks to one side (see .basket in style.css); chips spawn
-  // and wander clear of it rather than orbiting its old dead-center position.
   meals.forEach((m, i) => {
     const wrap = document.createElement("div");
     wrap.className = "chip-wrap";
@@ -201,11 +188,11 @@ export function initFloatingBasket({ arena, basketEl, meals, onDrop }) {
     arena.appendChild(wrap);
 
     const w = arena.clientWidth, h = arena.clientHeight;
-    const cx = w * 0.38, cy = h / 2; // rings centered left-of-basket, not dead-center
+    const cx = w / 2, cy = h / 2;
     const ring = i % 2;
     const count = Math.ceil(meals.length / 2);
     const angle = ((Math.floor(i / 2) / count) * 2 * Math.PI) + ring * 0.5 + (i % 3) * 0.15;
-    const rx = (ring ? 0.34 : 0.24) * w;
+    const rx = (ring ? 0.44 : 0.31) * w;
     const ry = (ring ? 0.40 : 0.27) * h;
     const x = Math.min(Math.max(cx + Math.cos(angle) * rx - 45, 4), w - CHIP_W);
     const y = Math.min(Math.max(cy + Math.sin(angle) * ry - 34, 4), h - CHIP_H);

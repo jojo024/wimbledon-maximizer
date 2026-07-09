@@ -28,7 +28,7 @@
 
 <script type="module">
 import { renderNav, api, esc, wim, starBar, toast,
-         getSession, namePrompt, ensureNamed, identityLine, wireIdentityChange,
+         getSession, namePrompt, ensureNamed, identityLine,
          connectFeed } from "/static/wim.js";
 renderNav("/");
 
@@ -77,10 +77,6 @@ function render() {
         </form>
       </div>
     </article>`).join("");
-  wireIdentityChange(grid, name => {
-    session.name = name;
-    grid.querySelectorAll(".identity-line b").forEach(b => b.textContent = name);
-  });
 }
 
 function cardFor(id) { return grid.querySelector(`.card[data-id="${id}"]`); }

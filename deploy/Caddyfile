@@ -1,0 +1,10 @@
+# Reverse proxy for Wimbledon$ Maximizer. Caddy terminates TLS (auto-provisioned
+# via Let's Encrypt, zero extra config) and forwards everything — including the
+# /ws/feed WebSocket upgrade, which reverse_proxy handles transparently — to the
+# app process listening on loopback only.
+#
+# Replace the domain below with your own, then: sudo caddy reload
+
+your-domain.example {
+	reverse_proxy 127.0.0.1:8030
+}

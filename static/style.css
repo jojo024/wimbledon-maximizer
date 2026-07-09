@@ -211,11 +211,6 @@ label.f { display: flex; flex-direction: column; gap: 6px; font-size: 0.85rem; c
 
 .identity-line { font-size: 0.85rem; color: var(--muted); display: flex; align-items: center; gap: 6px; }
 .identity-line b { color: var(--text); }
-.link-btn {
-  font: inherit; font-size: 0.8rem; font-weight: 700; color: var(--green-neon);
-  background: none; border: none; padding: 0; cursor: pointer; text-decoration: underline;
-}
-.link-btn:hover { color: var(--green); }
 
 /* ---------- comments ---------- */
 
@@ -256,12 +251,12 @@ label.f { display: flex; flex-direction: column; gap: 6px; font-size: 0.85rem; c
   touch-action: none;
 }
 
-/* Docked to the side (not dead-center) so wandering chips have room to drift
-   without constantly drifting across the drop zone; see initFloatingBasket()
-   in wim.js, which also treats this box as a wall the chips bounce off of. */
+/* Back at dead-center: initFloatingBasket() in wim.js treats this box as a
+   wall wandering chips bounce off of, so it no longer needs to be docked off
+   to the side to stay clear of them. */
 .basket {
-  position: absolute; left: 80%; top: 50%; transform: translate(-50%, -50%);
-  width: 160px; height: 160px; border-radius: 50%;
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: 190px; height: 190px; border-radius: 50%;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   font-size: 4rem; user-select: none;
   background: radial-gradient(circle, rgba(139, 92, 246, 0.18), rgba(34, 197, 94, 0.07) 70%, transparent);

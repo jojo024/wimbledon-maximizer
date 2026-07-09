@@ -17,7 +17,7 @@
   <div class="builder-layout" style="display:grid;grid-template-columns:1.6fr 1fr;gap:24px;align-items:start">
     <div class="arena" id="arena">
       <div class="basket" id="basket">
-        <span>&#129387;</span>
+        <span>&#129530;</span>
         <span class="hint">drop meals here</span>
       </div>
     </div>
@@ -46,7 +46,7 @@
 
 <script type="module">
 import { renderNav, api, esc, wim, fmtW, toast, getSession, ensureNamed,
-         identityLine, wireIdentityChange, initFloatingBasket } from "/static/wim.js";
+         identityLine, initFloatingBasket } from "/static/wim.js";
 renderNav("/builder");
 
 const TARGET = 3000;
@@ -161,10 +161,6 @@ renderBasket();
 
 const session = await getSession();
 identitySlot.innerHTML = identityLine(session.name || "not set yet");
-wireIdentityChange(identitySlot, name => {
-  session.name = name;
-  identitySlot.querySelector("b").textContent = name;
-});
 </script>
 </body>
 </html>

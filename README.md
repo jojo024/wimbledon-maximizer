@@ -8,12 +8,12 @@ The game: log the meals you ate today with a price in Wimbledons and an emoji, t
 
 - **Live leaderboard** (`/`) — floating glassmorphic combo cards that update in real time over a WebSocket: new combos, ratings, and comments appear with a glow, no refresh. Sort by top rated or newest. The highest-upvoted comment on each combo is surfaced right on the card.
 - **Fair ratings and comments** — one vote per person, enforced server-side via a signed session cookie (not `localStorage`); re-rating updates your existing vote. Comments can be upvoted the same way, and every post's author is your session's own display name — there is no free-text author field anywhere, so nobody can post as someone else.
-- **Session identity** — a lightweight signed cookie issued on first visit; the first time you try to post anything, you're prompted for a display name. Every form shows a read-only "Posting as `<name>`" line with an explicit "change" link — never an editable author box. No passwords.
-- **Basket Builder** (`/builder`) — meals and snacks wander and bob around a shopping basket docked to the side of the arena (bouncing off it like a wall, so they don't drift over the drop zone); drag one in and the chip you're moving bumps nearby ones out of the way. Submitting always logs that day's Daily Deal (any total); land on exactly 30 Wimbledons and it *also* enters the competition — one basket, two possible outcomes.
+- **Session identity** — a lightweight signed cookie issued on first visit; the first time you try to post anything, you're prompted for a display name. Every form shows a read-only "Posting as `<name>`" line — never an editable author box, and the name can't be changed once set, so it's a stable identity across everything you post.
+- **Basket Builder** (`/builder`) — meals and snacks wander and bob around a shopping basket in the middle of the arena, bouncing off it like a wall so they don't drift over the drop zone; drag one in and the chip you're moving bumps nearby ones out of the way. Submitting always logs that day's Daily Deal (any total); land on exactly 30 Wimbledons and it *also* enters the competition — one basket, two possible outcomes.
 - **Players** (`/players`) — today's ranking by closeness to 30 Wimbledons, plus an all-time leaderboard: average distance from 30 across every day since your first submission (a skipped day counts as W$0, the worst possible score) and your current daily streak.
 - **Add Meals** (`/meals`) — log a meal with name, price in Wimbledons, and an emoji (a large food/drink picker or type your own); it joins the shared meal pool.
 - **Admin console** (`/admin`) — key-protected; edit or delete any meal, rename or delete combos, **edit a combo's items** (with a live meter enforcing the exactly-30-Wimbledons rule), reset ratings, delete comments, and review/delete Daily Deal entries.
-- **Rate limiting** — a per-IP token bucket on all write endpoints keeps anyone on the LAN from spamming meals, combos, deals, or comments.
+- **Rate limiting** — a per-IP token bucket on all write endpoints (including every admin endpoint) keeps anyone from spamming meals, combos, deals, or comments, or brute-forcing the admin key.
 - **W$ glyph** — custom SVG (W with a horizontal strikethrough), used consistently for every price in the UI and as the browser-tab favicon.
 - Purple/green futuristic dark theme: glass cards, neon glows, grid overlay, floating animations.
 
@@ -32,10 +32,12 @@ On first run `wimbledon.db` (SQLite) is created next to `main.py` and seeded wit
 | Env var | Default | Purpose |
 |---|---|---|
 | `WIM_ADMIN_KEY` | `wimbledon` | Key for the `/admin` console and admin API (sent as `X-Admin-Key` header) |
+| `WIM_HOST` | `0.0.0.0` | Interface uvicorn binds to. Set to `127.0.0.1` when running behind a reverse proxy (see [Deploying on the internet](#deploying-on-the-internet)) so only the proxy can reach it. |
 | `WIM_PORT` | `8030` | HTTP port |
 | `WIM_SECRET` | auto-generated | HMAC secret for signing session cookies. If unset, a random secret is generated once and persisted to `.wim_secret` (gitignored) so sessions survive restarts. |
+| `WIM_FORWARDED_ALLOW_IPS` | `127.0.0.1` | Passed straight to uvicorn's `forwarded_allow_ips`: only connections from these addresses have their `X-Forwarded-For`/`X-Forwarded-Proto` headers trusted for the real client IP/scheme (used by rate limiting and the cookie's `Secure` flag). The default matches the documented `WIM_HOST=127.0.0.1`-behind-Caddy setup; leave it alone unless your reverse proxy runs somewhere else. |
 
-Change the admin key before letting anyone else on the network use it.
+Change the admin key before letting anyone else reach this — on a LAN or the internet.
 
 ## Tech stack
 
@@ -60,6 +62,10 @@ static/
   admin.html         admin console (meals / combos / daily deals / comments tabs, combo item editor)
 wimbledon.db         SQLite database (created at runtime, not committed)
 .wim_secret          auto-generated HMAC secret for session cookies (created at runtime, not committed)
+deploy/
+  Caddyfile                          reverse proxy + automatic HTTPS config
+  wimbledon-maximizer.service        systemd unit (Restart=on-failure)
+  wimbledon-maximizer.env.example    template for the real env file (gitignored)
 ```
 
 ## API overview
@@ -98,9 +104,85 @@ All POST endpoints are protected by an in-memory per-IP token bucket (burst 30, 
 - **One rating per person, enforced server-side.** A signed HMAC cookie (`voter_id`) identifies the caller; `ratings` has a `UNIQUE(combo_id, voter_id)` index, so re-rating updates the existing row via `ON CONFLICT ... DO UPDATE` instead of creating a duplicate.
 - **No passwords, ever.** Session identity is just an anonymous signed cookie plus a display name — enough to attribute posts without any account system.
 - **Live updates are additive, not authoritative.** The WebSocket feed only patches an already-loaded leaderboard (with a glow to draw the eye); a fresh page load always re-fetches `/api/combos` as the source of truth, so a missed or dropped WS message can't leave the UI in a wrong state.
-- **Author is never a form field.** Every write endpoint derives the author from the session's display name server-side; request models have no `author`/`created_by` field to spoof. The name can only be changed through the one dedicated endpoint (`/api/session/name`), which the UI exposes as a deliberate "change" action, never as something bundled into a post.
+- **Author is never a form field, and a name is permanent once set.** Every write endpoint derives the author from the session's display name server-side; request models have no `author`/`created_by` field to spoof. `/api/session/name` only succeeds once per session — the server rejects a second call — so there's no client-side "change identity" flow to build or secure.
 - **A missed Daily Deal day is scored as W$0, not skipped.** The all-time Players leaderboard is an average distance-from-30 since a player's *first* submission — every day since then, submitted or not, counts toward that average. This is what makes the streak counter meaningful: showing up daily is worth more than one great day followed by silence.
 - **One basket, two outcomes, not two pages.** Basket Builder and Daily Deal used to be separate pages that scattered the same meal pool into the same arena and differed only in submit-time validation. They're merged: submitting always logs a Daily Deal (any total), and additionally posts a competition Combo when the total lands on exactly 3000 cents — instead of asking the user to pick the "right" page before they've even built anything.
+
+## Deploying on the internet
+
+This assumes a Linux VPS (e.g. an IONOS VPS) with SSH access and a domain whose DNS
+you control. The app itself never talks TLS — Caddy sits in front of it, terminates
+HTTPS with an automatically-provisioned Let's Encrypt certificate, and proxies
+everything (including the `/ws/feed` WebSocket) to uvicorn, which only listens on
+`127.0.0.1` so it's unreachable except through Caddy.
+
+**One-time setup, on the server:**
+
+```bash
+# 1. DNS: create an A record for your domain pointing at the VPS's public IP
+#    (do this first — Caddy needs it resolvable to issue a certificate).
+
+# 2. System packages
+sudo apt update && sudo apt install -y python3-venv caddy
+
+# 3. Get the code
+sudo mkdir -p /opt/wimbledon-maximizer
+sudo chown $USER /opt/wimbledon-maximizer
+git clone https://github.com/<you>/wimbledon-maximizer.git /opt/wimbledon-maximizer
+cd /opt/wimbledon-maximizer
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+
+# 4. Configure secrets
+cp deploy/wimbledon-maximizer.env.example deploy/wimbledon-maximizer.env
+nano deploy/wimbledon-maximizer.env   # set a real WIM_ADMIN_KEY
+
+# 5. Run it as a service
+sudo useradd -r -s /usr/sbin/nologin wimbledon || true
+sudo chown -R wimbledon:wimbledon /opt/wimbledon-maximizer
+sudo cp deploy/wimbledon-maximizer.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now wimbledon-maximizer
+
+# 6. Reverse proxy + HTTPS
+sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
+sudo nano /etc/caddy/Caddyfile        # put your real domain in place of the placeholder
+sudo systemctl reload caddy
+
+# 7. Firewall: only 80/443 need to be reachable from the internet (uvicorn's
+#    8030 is bound to loopback already, but belt-and-suspenders):
+sudo ufw allow 80,443/tcp
+sudo ufw enable
+```
+
+Visit `https://your-domain` — Caddy fetches the certificate on first request.
+
+**Ongoing workflow — adding features and fixing bugs:**
+
+There's no build step and no separate "staging" environment for a project this size,
+so the loop is short:
+
+1. Develop and test locally exactly as described in [Quickstart](#quickstart) —
+   `python main.py`, hit `http://localhost:8030`, iterate.
+2. Commit and push to `main` once it works locally.
+3. On the server: `cd /opt/wimbledon-maximizer && git pull && sudo systemctl restart wimbledon-maximizer`.
+
+That's the whole deploy: pull the new code, restart the process. `init_db()` runs
+every startup and only ever *adds* tables/columns (`CREATE TABLE IF NOT EXISTS`,
+guarded `ALTER TABLE ... ADD COLUMN`), so a schema change ships the same way as a
+one-line copy fix — no separate migration step, and the live `wimbledon.db` is
+never dropped or recreated by a restart.
+
+A few habits worth keeping as this grows:
+- `sudo journalctl -u wimbledon-maximizer -f` to watch logs / catch the startup
+  warning if `WIM_ADMIN_KEY` is ever accidentally unset.
+- Before a change that touches the DB schema, `cp wimbledon.db wimbledon.db.bak`
+  on the server as a cheap rollback point.
+- If a deploy breaks something, `git log --oneline`, find the last good commit,
+  `git checkout <sha>` (or `git revert`), restart the service.
+- The Housekeeping section of [TODO.md](TODO.md) has the next real investments here
+  — a pytest suite and GitHub Actions CI — worth doing once bugs start slipping
+  through manual smoke-testing.
 
 ## Development
 

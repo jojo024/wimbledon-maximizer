@@ -1,0 +1,21 @@
+[Unit]
+Description=Wimbledon$ Maximizer
+After=network.target
+
+[Service]
+Type=simple
+User=wimbledon
+Group=wimbledon
+WorkingDirectory=/opt/wimbledon-maximizer
+EnvironmentFile=/opt/wimbledon-maximizer/deploy/wimbledon-maximizer.env
+ExecStart=/opt/wimbledon-maximizer/.venv/bin/python main.py
+Restart=on-failure
+RestartSec=5
+
+# Filesystem is only touched inside the app directory (wimbledon.db, .wim_secret).
+ProtectSystem=strict
+ReadWritePaths=/opt/wimbledon-maximizer
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

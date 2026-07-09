@@ -3,6 +3,9 @@ wimbledon.db
 wimbledon.db-journal
 .wim_secret
 
+# real deployment secrets (the .example is tracked, this is not)
+deploy/wimbledon-maximizer.env
+
 # python
 __pycache__/
 *.pyc

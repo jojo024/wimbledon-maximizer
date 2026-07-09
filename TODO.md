@@ -33,6 +33,25 @@ for context on each item. Check items off as they ship.
       cents; `/deals` page removed, `/api/deals/*` endpoints unchanged
 - [x] Expand the emoji picker (`static/meals.html`, `EMOJIS` array) to ~120 food/drink emojis
 
+## v0.3.2 — Internet deployment hardening
+
+- [x] Resolve the deployment-topology risks flagged in the v0.3.1 security review:
+      trust `X-Forwarded-For`/`X-Forwarded-Proto` only via uvicorn's own
+      `forwarded_allow_ips` (default `127.0.0.1`) instead of a custom, riskier
+      reimplementation; cookie `Secure` flag now follows the resolved scheme; added
+      a global + per-IP cap on `/ws/feed` connections
+- [x] Warn on startup if `WIM_ADMIN_KEY` is unset (still using the default)
+- [x] Pin exact dependency versions in requirements.txt
+- [x] `deploy/` — Caddyfile (reverse proxy + automatic HTTPS), systemd unit, env template
+- [x] README § Deploying on the internet — VPS setup steps and the ongoing
+      pull-and-restart update workflow
+- [x] Display name is now permanently locked once set — `/api/session/name` 400s on
+      a second call; the "change" link/flow removed from the UI entirely
+- [x] Basket moved back to dead-center (the obstacle-bounce physics from v0.3.1
+      already keep wandering chips clear of it; the off-to-the-side workaround
+      was no longer needed)
+- [x] Basket hint icon changed to the actual "basket" emoji (was a stray mango)
+
 ## v0.4.0 — Seasons and polish
 
 - [ ] Season table + weekly rollover job; archive past seasons
@@ -48,23 +67,14 @@ for context on each item. Check items off as they ship.
       (admin key default had regressed to "wimbledons", non-constant-time key
       comparison, no rate limiting on admin endpoints). SQL injection surface,
       XSS escaping, CORS, and CSRF all came back clean.
-- [ ] Deployment-topology decisions, not yet resolved (all are only real risks if this
-      leaves a trusted LAN — see the write-up in [ROADMAP.md](ROADMAP.md)):
-      - `rate_limit()` keys off `request.client.host`, which becomes one shared bucket
-        for everyone if deployed behind a reverse proxy that isn't configured to pass
-        through the real client IP
-      - session cookie has no `secure` flag; fine over plain HTTP on a LAN, wrong if
-        ever served over HTTPS without setting it
-      - `/ws/feed` has no per-IP connection cap (each connection is unauthenticated
-        and cheap, but unbounded)
-      - `uvicorn.run(host="0.0.0.0", ...)` binds every interface, not just localhost —
-        intentional for LAN play, but combined with a default admin key means "change
-        `WIM_ADMIN_KEY` before exposing this beyond a trusted LAN" is load-bearing
-- [ ] Warn on startup if `WIM_ADMIN_KEY` is unset (still using the default)
+- [x] Deployment-topology risks from the review — resolved in v0.3.2 above.
 - [ ] pytest suite: combo total validation, admin auth, snapshot integrity, cascade deletes
 - [ ] GitHub Actions CI: syntax + import check on push
-- [ ] Pin exact dependency versions in requirements.txt (currently `>=`, so a future
-      install could silently pull in a breaking or vulnerable release)
+
+## Done (v0.3.2)
+
+- [x] Internet-deployment hardening (proxy-aware IP/scheme, secure cookies, WS cap,
+      startup warning, pinned deps, Caddy + systemd artifacts, permanent display names)
 
 ## Done (v0.3.1)
 

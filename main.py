@@ -23,8 +23,19 @@ STATIC = BASE / "static"
 SECRET_PATH = BASE / ".wim_secret"
 ADMIN_KEY = os.environ.get("WIM_ADMIN_KEY", "wimbledon")
 TARGET_CENTS = 3000  # exactly W$30.00
+HOST = os.environ.get("WIM_HOST", "0.0.0.0")
 PORT = int(os.environ.get("WIM_PORT", "8030"))
 COOKIE = "wim_session"
+
+# uvicorn's own ProxyHeadersMiddleware (always on) already trusts
+# X-Forwarded-For/X-Forwarded-Proto — but *only* from connections whose
+# direct peer address is in FORWARDED_ALLOW_IPS — and rewrites request.client
+# / request.url.scheme accordingly before this app ever sees the request. So
+# application code just reads those normally; it must never re-parse the
+# raw headers itself (that reimplementation is exactly where a first-vs-last
+# entry bug would let a client spoof its own IP). Default trusts only
+# loopback, matching the documented WIM_HOST=127.0.0.1-behind-Caddy setup.
+FORWARDED_ALLOW_IPS = os.environ.get("WIM_FORWARDED_ALLOW_IPS", "127.0.0.1")
 
 
 def _load_secret() -> bytes:
@@ -163,19 +174,35 @@ def init_db():
 
 # ---------- live feed (WebSocket) ----------
 
+MAX_WS_TOTAL = 500   # generous for a friend-group game; bounded so it can't be exhausted
+MAX_WS_PER_IP = 8     # one browser can hold a few tabs open; more than that is abuse
+
+
 class ConnectionManager:
     """Tracks connected leaderboard clients and fans out events to them."""
 
     def __init__(self):
         self.active: set[WebSocket] = set()
+        self.by_ip: dict[str, int] = {}
         self.loop: asyncio.AbstractEventLoop | None = None
 
-    async def connect(self, ws: WebSocket):
+    async def connect(self, ws: WebSocket, ip: str) -> bool:
+        """Accept unless global or per-IP caps are already full. Returns whether
+        the connection was accepted (caller should stop if False)."""
+        if len(self.active) >= MAX_WS_TOTAL or self.by_ip.get(ip, 0) >= MAX_WS_PER_IP:
+            await ws.close(code=1013)  # "try again later"
+            return False
         await ws.accept()
         self.active.add(ws)
+        self.by_ip[ip] = self.by_ip.get(ip, 0) + 1
+        return True
 
-    def disconnect(self, ws: WebSocket):
+    def disconnect(self, ws: WebSocket, ip: str):
         self.active.discard(ws)
+        if ip in self.by_ip:
+            self.by_ip[ip] -= 1
+            if self.by_ip[ip] <= 0:
+                del self.by_ip[ip]
 
     async def broadcast(self, event: dict):
         for ws in list(self.active):
@@ -206,6 +233,24 @@ init_db()
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 
+# ---------- request origin (proxy-aware) ----------
+
+def client_ip(request: Request | WebSocket) -> str:
+    """Real client IP. uvicorn's ProxyHeadersMiddleware has already resolved
+    this from X-Forwarded-For if (and only if) the direct peer is in
+    FORWARDED_ALLOW_IPS — reading request.client here directly, rather than
+    re-parsing the header ourselves, is what keeps that trust boundary in
+    one place instead of two (mis-)implementations of it."""
+    return request.client.host if request.client else "?"
+
+
+def is_https(request: Request) -> bool:
+    """Whether the ORIGINAL request was HTTPS — already resolved from
+    X-Forwarded-Proto by uvicorn's ProxyHeadersMiddleware under the same
+    trust rule as client_ip()."""
+    return request.url.scheme == "https"
+
+
 # ---------- session identity ----------
 
 def sign(voter_id: str) -> str:
@@ -228,7 +273,8 @@ def get_voter(request: Request, response: Response) -> str:
         voter_id = secrets.token_urlsafe(16)
         response.set_cookie(
             COOKIE, f"{voter_id}.{sign(voter_id)}",
-            max_age=60 * 60 * 24 * 365, httponly=True, samesite="lax")
+            max_age=60 * 60 * 24 * 365, httponly=True, samesite="lax",
+            secure=is_https(request))
         with db() as conn:
             conn.execute("INSERT OR IGNORE INTO sessions(voter_id) VALUES (?)", (voter_id,))
     return voter_id
@@ -257,7 +303,7 @@ RATE_REFILL = 0.5      # tokens per second (~1 write every 2s sustained)
 
 
 def rate_limit(request: Request):
-    ip = request.client.host if request.client else "?"
+    ip = client_ip(request)
     now = time.monotonic()
     tokens, last = RATE_BUCKETS.get(ip, (RATE_CAP, now))
     tokens = min(RATE_CAP, tokens + (now - last) * RATE_REFILL)
@@ -405,6 +451,8 @@ def get_session(voter_id: str = Depends(get_voter)):
 def set_session_name(payload: NameIn, voter_id: str = Depends(get_voter)):
     name = payload.name.strip()
     with db() as conn:
+        if display_name(conn, voter_id):
+            raise HTTPException(400, "Your name is already set and can't be changed.")
         conn.execute(
             "INSERT INTO sessions(voter_id, display_name) VALUES (?,?)"
             " ON CONFLICT(voter_id) DO UPDATE SET display_name=excluded.display_name",
@@ -637,14 +685,18 @@ def deals_leaderboard():
 
 @app.websocket("/ws/feed")
 async def ws_feed(ws: WebSocket):
-    await MANAGER.connect(ws)
+    ip = client_ip(ws)
+    if not await MANAGER.connect(ws, ip):
+        return
     try:
         while True:
             await ws.receive_text()  # clients don't send; this just detects disconnect
     except WebSocketDisconnect:
-        MANAGER.disconnect(ws)
+        pass
     except Exception:
-        MANAGER.disconnect(ws)
+        pass
+    finally:
+        MANAGER.disconnect(ws, ip)
 
 
 # ---------- admin API ----------
@@ -792,4 +844,9 @@ def admin_delete_comment(comment_id: int, x_admin_key: str | None = Header(defau
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=PORT)
+    if ADMIN_KEY == "wimbledon" and not os.environ.get("WIM_ADMIN_KEY"):
+        print("WARNING: WIM_ADMIN_KEY is not set — using the default admin key,"
+              " which is public (it's in the README). Anyone who finds this site"
+              " can edit or delete the entire database. Set WIM_ADMIN_KEY before"
+              " exposing this beyond a trusted LAN.", flush=True)
+    uvicorn.run(app, host=HOST, port=PORT, forwarded_allow_ips=FORWARDED_ALLOW_IPS)

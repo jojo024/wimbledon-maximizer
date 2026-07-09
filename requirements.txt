@@ -1,3 +1,3 @@
-fastapi>=0.110
-uvicorn>=0.29
-websockets>=12  # /ws/feed live leaderboard (uvicorn's WebSocket protocol)
+fastapi==0.136.3
+uvicorn==0.49.0
+websockets==16.0  # /ws/feed live leaderboard (uvicorn's WebSocket protocol)
