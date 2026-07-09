@@ -21,7 +21,7 @@ BASE = Path(__file__).parent
 DB_PATH = BASE / "wimbledon.db"
 STATIC = BASE / "static"
 SECRET_PATH = BASE / ".wim_secret"
-ADMIN_KEY = os.environ.get("WIM_ADMIN_KEY", "wimbledons")
+ADMIN_KEY = os.environ.get("WIM_ADMIN_KEY", "wimbledon")
 TARGET_CENTS = 3000  # exactly W$30.00
 PORT = int(os.environ.get("WIM_PORT", "8030"))
 COOKIE = "wim_session"
@@ -650,17 +650,20 @@ async def ws_feed(ws: WebSocket):
 # ---------- admin API ----------
 
 def require_admin(key: str | None):
-    if key != ADMIN_KEY:
+    # Constant-time compare: a plain `!=` leaks a timing signal proportional
+    # to the matching prefix length, which a network attacker could otherwise
+    # use to guess the key one character at a time.
+    if not key or not hmac.compare_digest(key, ADMIN_KEY):
         raise HTTPException(401, "Invalid admin key")
 
 
-@app.get("/api/admin/verify")
+@app.get("/api/admin/verify", dependencies=[Depends(rate_limit)])
 def admin_verify(x_admin_key: str | None = Header(default=None)):
     require_admin(x_admin_key)
     return {"ok": True}
 
 
-@app.put("/api/admin/meals/{meal_id}")
+@app.put("/api/admin/meals/{meal_id}", dependencies=[Depends(rate_limit)])
 def admin_update_meal(meal_id: int, meal: MealIn,
                       x_admin_key: str | None = Header(default=None)):
     require_admin(x_admin_key)
@@ -673,7 +676,7 @@ def admin_update_meal(meal_id: int, meal: MealIn,
     return {"ok": True}
 
 
-@app.delete("/api/admin/meals/{meal_id}")
+@app.delete("/api/admin/meals/{meal_id}", dependencies=[Depends(rate_limit)])
 def admin_delete_meal(meal_id: int, x_admin_key: str | None = Header(default=None)):
     require_admin(x_admin_key)
     with db() as conn:
@@ -683,7 +686,7 @@ def admin_delete_meal(meal_id: int, x_admin_key: str | None = Header(default=Non
     return {"ok": True}
 
 
-@app.put("/api/admin/combos/{combo_id}")
+@app.put("/api/admin/combos/{combo_id}", dependencies=[Depends(rate_limit)])
 def admin_update_combo(combo_id: int, upd: ComboUpdate,
                        x_admin_key: str | None = Header(default=None)):
     require_admin(x_admin_key)
@@ -695,7 +698,7 @@ def admin_update_combo(combo_id: int, upd: ComboUpdate,
     return {"ok": True}
 
 
-@app.put("/api/admin/combos/{combo_id}/items")
+@app.put("/api/admin/combos/{combo_id}/items", dependencies=[Depends(rate_limit)])
 def admin_update_combo_items(combo_id: int, upd: ComboItemsUpdate,
                              x_admin_key: str | None = Header(default=None)):
     require_admin(x_admin_key)
@@ -718,7 +721,7 @@ def admin_update_combo_items(combo_id: int, upd: ComboItemsUpdate,
     return {"ok": True}
 
 
-@app.delete("/api/admin/combos/{combo_id}")
+@app.delete("/api/admin/combos/{combo_id}", dependencies=[Depends(rate_limit)])
 def admin_delete_combo(combo_id: int, x_admin_key: str | None = Header(default=None)):
     require_admin(x_admin_key)
     with db() as conn:
@@ -729,7 +732,7 @@ def admin_delete_combo(combo_id: int, x_admin_key: str | None = Header(default=N
     return {"ok": True}
 
 
-@app.delete("/api/admin/ratings/{combo_id}")
+@app.delete("/api/admin/ratings/{combo_id}", dependencies=[Depends(rate_limit)])
 def admin_clear_ratings(combo_id: int, x_admin_key: str | None = Header(default=None)):
     require_admin(x_admin_key)
     with db() as conn:
@@ -739,7 +742,7 @@ def admin_clear_ratings(combo_id: int, x_admin_key: str | None = Header(default=
     return {"ok": True}
 
 
-@app.get("/api/admin/comments")
+@app.get("/api/admin/comments", dependencies=[Depends(rate_limit)])
 def admin_all_comments(x_admin_key: str | None = Header(default=None)):
     require_admin(x_admin_key)
     with db() as conn:
@@ -750,7 +753,7 @@ def admin_all_comments(x_admin_key: str | None = Header(default=None)):
     return [dict(r) for r in rows]
 
 
-@app.get("/api/admin/deals")
+@app.get("/api/admin/deals", dependencies=[Depends(rate_limit)])
 def admin_all_deals(x_admin_key: str | None = Header(default=None)):
     require_admin(x_admin_key)
     with db() as conn:
@@ -761,7 +764,7 @@ def admin_all_deals(x_admin_key: str | None = Header(default=None)):
     return [{**dict(r), "distance_cents": deal_distance(r["total_cents"])} for r in rows]
 
 
-@app.delete("/api/admin/deals/{deal_id}")
+@app.delete("/api/admin/deals/{deal_id}", dependencies=[Depends(rate_limit)])
 def admin_delete_deal(deal_id: int, x_admin_key: str | None = Header(default=None)):
     require_admin(x_admin_key)
     with db() as conn:
@@ -771,7 +774,7 @@ def admin_delete_deal(deal_id: int, x_admin_key: str | None = Header(default=Non
     return {"ok": True}
 
 
-@app.delete("/api/admin/comments/{comment_id}")
+@app.delete("/api/admin/comments/{comment_id}", dependencies=[Depends(rate_limit)])
 def admin_delete_comment(comment_id: int, x_admin_key: str | None = Header(default=None)):
     require_admin(x_admin_key)
     with db() as conn:
