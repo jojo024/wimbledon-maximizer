@@ -79,7 +79,6 @@ import { renderNav, api, esc, wim, fmtW, toast, getSession, ensureNamed,
 renderNav("/builder");
 
 const TARGET = 3000;
-const VIS_CAP = TARGET * 2; // meter bar visualizes up to 60 Wimbledons
 const CHEAPEST_ITEM_CENTS = 105; // W$1.05 — below this, there's nothing left to "stock up" on
 const arena = document.getElementById("arena");
 const basketEl = document.getElementById("basket");
@@ -122,14 +121,15 @@ function renderBasket() {
         </div>`;
       }).join("");
 
-  const pct = Math.min(t / VIS_CAP, 1) * 100;
+  const pct = Math.min(t / TARGET, 1) * 100;
   fillEl.style.width = pct + "%";
   meterEl.classList.toggle("exact", exact);
+  meterEl.classList.toggle("over", t > TARGET);
   totalLabel.innerHTML = `${wim(t)} today`;
   if (exact) {
     statusLabel.innerHTML = `<span class="exact-txt">EXACTLY 30 — enters the competition too!</span>`;
   } else if (t > TARGET) {
-    statusLabel.innerHTML = `${fmtW(t - TARGET)} Wimbledons over 30`;
+    statusLabel.innerHTML = `<span class="over-txt">${fmtW(t - TARGET)} Wimbledons over 30</span>`;
   } else if (t > 0) {
     statusLabel.innerHTML = `${fmtW(TARGET - t)} Wimbledons under 30`;
   } else {

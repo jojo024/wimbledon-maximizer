@@ -118,6 +118,16 @@ for context on each item. Check items off as they ship.
 - [x] Scrolling ticker banner on `/tips`: top tips by score crawl continuously
       above the normal reactable list, pauses on hover, seamless CSS-only loop
 
+## v0.3.11 — Consistent price formatting, meter rescale
+
+- [x] `fmtW()` always shows two decimals ("7.00", not "7") instead of stripping
+      a trailing ".00" — every price in the UI now lines up in the same format
+- [x] Basket Builder meter rescaled to fill 0→100% between W$0 and exactly 30
+      (was 0→60, so a modest basket visually looked barely started); going over
+      30 now caps the bar at 100% and switches it red via the existing (until
+      now unused) `.meter.over`/`.over-txt` styling instead of just continuing
+      to underfill
+
 ## v0.3.10 — Merge honourable mentions into the main strip
 
 - [x] Drop the separate Honourable Mentions strip/section; honourable-mention
@@ -158,16 +168,14 @@ for context on each item. Check items off as they ship.
       comparison, no rate limiting on admin endpoints). SQL injection surface,
       XSS escaping, CORS, and CSRF all came back clean.
 - [x] Deployment-topology risks from the review — resolved in v0.3.2 above.
-- [ ] **Bug:** Basket Builder meter only reaches 50% width at exactly 30 Wimbledons
-      (it visualizes up to `TARGET * 2` = 60, so a modest basket looks like it
-      "stops 1/3 way through" instead of reflecting progress toward 30 directly).
-      Reported with a suggested fix: rescale so the bar fills 0→100% as you
-      approach 30 (not 60), keep the green-at-exact / different-color-when-over
-      treatment that already exists (`.meter.exact`/`.meter.over` in style.css).
-      Not yet fixed — flagged for a deliberate rescale, not a quick patch, since
-      "over 30" then needs its own visual language once 30 is the top of the bar.
+- [x] **Bug:** Basket Builder meter only reached 50% width at exactly 30 Wimbledons
+      (it visualized up to `TARGET * 2` = 60). Fixed in v0.3.11 below.
 - [ ] pytest suite: combo total validation, admin auth, snapshot integrity, cascade deletes
 - [ ] GitHub Actions CI: syntax + import check on push
+
+## Done (v0.3.11)
+
+- [x] Consistent two-decimal price formatting, Basket Builder meter rescale
 
 ## Done (v0.3.10)
 

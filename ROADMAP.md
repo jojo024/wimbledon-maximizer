@@ -370,6 +370,30 @@ ratings and comments, admin console, W$ glyph, purple/green futuristic theme.
 
 > **Status:** Shipped.
 
+## v0.3.11 — Consistent price formatting, meter rescale
+
+| # | Item | Effort | Why now |
+|---|------|--------|---------|
+| 1 | `fmtW()` always renders two decimals | XS | User request: every price should read like "7.00"/"4.50"/"3.55", not sometimes drop the decimals ("7") — a display-only change, prices are still integer cents underneath |
+| 2 | Rescale the Basket Builder meter to 0→30, not 0→60 | S | User screenshot: a W$14.05 basket visually looked barely a third full. The meter visualized progress up to `TARGET * 2` (60) instead of `TARGET` (30), so it could never look more than half full even exactly on target |
+
+### Item details
+
+1. **Price formatting** — `static/wim.js` (`fmtW()`). Previously stripped a
+   trailing `".00"` (`30` instead of `30.00`) so whole-Wimbledon prices looked
+   different from fractional ones; now always returns `(cents / 100).toFixed(2)`
+   with no stripping. `wim()` and every caller of `fmtW()` inherit the fix
+   automatically since they all go through this one function.
+2. **Meter rescale** — `static/builder.html`. `VIS_CAP = TARGET * 2` is gone;
+   `pct = Math.min(t / TARGET, 1) * 100` now maps W$0→30 to 0%→100% directly, so
+   the bar actually reads as "how close to 30" rather than "how close to 60."
+   Going over 30 caps the width at 100% and toggles the `.meter.over` class
+   (red gradient) and wraps the status text in `.over-txt` (red) — both classes
+   already existed in `style.css` from the original design but were never
+   actually applied by the JS.
+
+> **Status:** Shipped.
+
 ## v0.4.0 — Seasons and polish
 
 | # | Item | Effort | Why now |

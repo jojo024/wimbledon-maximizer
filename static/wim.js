@@ -10,10 +10,9 @@ export const WIM_SVG = `<svg class="wim-glyph" viewBox="0 0 24 24" fill="none"
   <path d="M2 12 H22"/>
 </svg>`;
 
-// cents -> "30" / "12.50"
+// cents -> "30.00" / "12.50" — always two decimals, so every price in the UI lines up
 export function fmtW(cents) {
-  const v = (cents / 100).toFixed(2);
-  return v.endsWith(".00") ? v.slice(0, -3) : v;
+  return (cents / 100).toFixed(2);
 }
 
 // cents -> inline W$ amount markup
