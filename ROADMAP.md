@@ -333,6 +333,23 @@ ratings and comments, admin console, W$ glyph, purple/green futuristic theme.
 
 > **Status:** Shipped.
 
+## v0.3.9 — Higher per-item quantity cap
+
+| # | Item | Effort | Why now |
+|---|------|--------|---------|
+| 1 | Raise per-item qty cap 20 → 99 | XS | User hit the 20 cap trying to add 24 of the same meal to a combo; the limit was an arbitrary guard, not a rule tied to game logic |
+
+### Item details
+
+1. **Qty cap** — `main.py`: `Field(ge=1, le=20)` → `le=99` on `ComboItemIn.qty`
+   (combo submission + Daily Deal items), `SnapshotItemIn.qty` (admin combo
+   items), and `BasketItemIn.qty` (basket draft). Matching `max="20"` → `max="99"`
+   on the two qty inputs in `static/admin.html`. 99 is still a sanity bound
+   (nothing in the game logic needs more), just no longer one low enough to
+   block a legitimate combo/basket built from a single cheap item.
+
+> **Status:** Shipped.
+
 ## v0.4.0 — Seasons and polish
 
 | # | Item | Effort | Why now |

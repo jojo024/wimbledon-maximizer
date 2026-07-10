@@ -73,7 +73,7 @@ function itemRow(emoji = "", name = "", priceCents = 0, qty = 1) {
     <input class="ie-emoji" data-f="emoji" value="${esc(emoji)}" maxlength="8" placeholder="🍽">
     <input class="ie-name" data-f="meal_name" value="${esc(name)}" maxlength="60" placeholder="Item name">
     <input class="ie-price" data-f="price" type="number" step="0.01" min="0.01" value="${fmtW(priceCents)}" title="Price in Wimbledons">
-    <input class="ie-qty" data-f="qty" type="number" min="1" max="20" value="${qty}" title="Quantity">
+    <input class="ie-qty" data-f="qty" type="number" min="1" max="99" value="${qty}" title="Quantity">
     <button class="btn btn-sm btn-danger" data-act="rm-item" title="Remove">&times;</button>
   </div>`;
 }
@@ -174,7 +174,7 @@ async function loadTab() {
         </div>
         <div style="display:flex;gap:8px;margin-bottom:12px">
           <select id="new-combo-picker" style="flex:1">${mealOptions()}</select>
-          <input id="new-combo-qty" type="number" min="1" max="20" value="1" style="width:70px" title="Quantity">
+          <input id="new-combo-qty" type="number" min="1" max="99" value="1" style="width:70px" title="Quantity">
           <button type="button" class="btn btn-sm" data-act="pick-add">+ Add</button>
         </div>
         <div class="basket-list" id="new-combo-rows"></div>

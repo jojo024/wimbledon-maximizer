@@ -118,6 +118,12 @@ for context on each item. Check items off as they ship.
 - [x] Scrolling ticker banner on `/tips`: top tips by score crawl continuously
       above the normal reactable list, pauses on hover, seamless CSS-only loop
 
+## v0.3.9 — Higher per-item quantity cap
+
+- [x] Raise the per-item qty cap from 20 to 99 (`ComboItemIn`, `SnapshotItemIn`,
+      `BasketItemIn` in `main.py`; matching `max` attributes in `admin.html`) —
+      20 was arbitrary and blocked legitimate combos/baskets with 20+ of one item
+
 ## v0.3.8 — Merge Players into the Leaderboard
 
 - [x] Merge `/players` (today's ranking + all-time standings) into `/` beneath
@@ -154,6 +160,10 @@ for context on each item. Check items off as they ship.
       "over 30" then needs its own visual language once 30 is the top of the bar.
 - [ ] pytest suite: combo total validation, admin auth, snapshot integrity, cascade deletes
 - [ ] GitHub Actions CI: syntax + import check on push
+
+## Done (v0.3.9)
+
+- [x] Per-item quantity cap raised from 20 to 99
 
 ## Done (v0.3.8)
 

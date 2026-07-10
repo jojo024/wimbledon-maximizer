@@ -360,7 +360,7 @@ class MealIn(BaseModel):
 
 class ComboItemIn(BaseModel):
     meal_id: int
-    qty: int = Field(ge=1, le=20)
+    qty: int = Field(ge=1, le=99)
 
 
 class ComboIn(BaseModel):
@@ -389,7 +389,7 @@ class SnapshotItemIn(BaseModel):
     meal_name: str = Field(min_length=1, max_length=60)
     emoji: str = Field(min_length=1, max_length=8)
     price_cents: int = Field(gt=0, le=3000)
-    qty: int = Field(ge=1, le=20)
+    qty: int = Field(ge=1, le=99)
 
 
 class ComboItemsUpdate(BaseModel):
@@ -424,7 +424,7 @@ class AdminTextUpdate(BaseModel):
 
 class BasketItemIn(BaseModel):
     meal_id: int
-    qty: int = Field(ge=1, le=20)
+    qty: int = Field(ge=1, le=99)
 
 
 class BasketIn(BaseModel):
