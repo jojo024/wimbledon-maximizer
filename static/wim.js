@@ -66,7 +66,6 @@ export function renderNav(active) {
   const links = [
     ["/", "Leaderboard"],
     ["/builder", "Basket Builder"],
-    ["/players", "Players"],
     ["/tips", "Tips & Tricks"],
     ["/meals", "Add Meals"],
     ["/admin", "Admin"],

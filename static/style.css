@@ -103,14 +103,19 @@ nav.wim-nav .spacer { flex: 1; }
 
 /* ---------- cards ---------- */
 
-.combo-grid {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
-  gap: 26px; margin-top: 26px;
+/* Horizontally-scrolling strip (combos, honourable mentions): cards sit still
+   side by side instead of floating in a reflowing grid — drag/scroll to browse. */
+.combo-strip {
+  display: flex; gap: 26px; margin-top: 26px; padding-bottom: 16px;
+  overflow-x: auto; scroll-snap-type: x proximity;
 }
+.combo-strip .card { flex: 0 0 310px; scroll-snap-align: start; }
+.combo-strip::-webkit-scrollbar { height: 10px; }
+.combo-strip::-webkit-scrollbar-thumb { background: var(--glass-strong); border-radius: 999px; }
+.combo-strip::-webkit-scrollbar-track { background: transparent; }
 
 .card {
   position: relative;
-  z-index: 1;
   background: linear-gradient(160deg, var(--glass-strong), rgba(13, 8, 25, 0.6));
   border: 1px solid var(--glass-border);
   border-radius: var(--radius);
@@ -118,19 +123,13 @@ nav.wim-nav .spacer { flex: 1; }
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.02) inset;
-  animation: floaty 6s ease-in-out infinite;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
-/* Floating neighbors have no fixed stacking order, so a card being interacted
-   with (hovered, focused, or with its comments open) needs to win the paint
-   order explicitly — otherwise a still-floating card can drift on top of it. */
 .card:hover,
 .card:focus-within,
 .card:has(.comments.open) {
   border-color: rgba(110, 231, 160, 0.5);
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5), 0 0 26px rgba(110, 231, 160, 0.12);
-  animation-play-state: paused;
-  z-index: 20;
 }
 
 @keyframes floaty {

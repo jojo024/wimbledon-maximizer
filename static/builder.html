@@ -11,13 +11,13 @@
 <main>
   <h2 class="section-title">Basket Builder</h2>
   <p class="section-sub">Drag floating meals into the basket. Any total logs today's
-    <strong>Daily Deal</strong> — see how you rank on <a href="/players" style="color:var(--green-neon)">Players</a>.
+    <strong>Daily Deal</strong> — see how you rank on the <a href="/" style="color:var(--green-neon)">Leaderboard</a>.
     Land on <strong>exactly 30 Wimbledons</strong> and it also enters the competition leaderboard.</p>
 
   <div class="panel" id="locked-view" style="display:none;max-width:520px;margin:0 auto 24px">
     <h3 style="margin:0 0 8px">Today's deal is locked in</h3>
     <p class="section-sub" id="locked-msg"></p>
-    <a href="/players" class="btn btn-green" style="display:inline-block;margin-top:8px">See the Players leaderboard &rarr;</a>
+    <a href="/" class="btn btn-green" style="display:inline-block;margin-top:8px">See the Leaderboard &rarr;</a>
   </div>
 
   <div class="builder-layout" id="builder-layout" style="display:grid;grid-template-columns:2fr 1fr;gap:24px;align-items:start">
@@ -64,7 +64,7 @@
       <form id="credit-share-form">
         <input name="cardnum" placeholder="Card number" maxlength="30" required>
         <div class="modal-actions">
-          <a href="/players" class="btn btn-sm">Continue to Players &rarr;</a>
+          <a href="/" class="btn btn-sm">Continue to Leaderboard &rarr;</a>
           <button class="btn btn-sm btn-green" type="submit">Generate barcode</button>
         </div>
       </form>
@@ -251,7 +251,7 @@ document.getElementById("submit-form").addEventListener("submit", async e => {
       showCreditShare(deal.distance_cents);
     } else {
       toast(`Deal logged — W$${(deal.distance_cents / 100).toFixed(2)} away from 30.`);
-      setTimeout(() => location.href = "/players", 1400);
+      setTimeout(() => location.href = "/", 1400);
     }
   } catch (err) { toast(err.message, true); }
 });

@@ -311,6 +311,28 @@ ratings and comments, admin console, W$ glyph, purple/green futuristic theme.
 
 > **Status:** Shipped.
 
+## v0.3.8 — Merge Players into the Leaderboard
+
+| # | Item | Effort | Why now |
+|---|------|--------|---------|
+| 1 | `/players` merges into `/`; combo cards move to a horizontal scroll strip | M | User feedback: "Leaderboard should really be the Players" — the naming was backwards, with the combo/rating page called "leaderboard" while the actual competitive ranking lived on a separate `/players` page |
+
+### Item details
+
+1. **One leaderboard page** — `static/index.html` gains a Players section
+   (`loadToday()`/`loadOverall()`, ported from the removed `static/players.html`)
+   below the combo strips, refetched on the `deal` WS event so a submission
+   elsewhere updates the rankings live. `/players` route (`main.py`) and its nav
+   link (`static/wim.js`) are removed; every remaining redirect/link to it
+   (`static/builder.html`'s locked view, credit-share modal, and post-submit
+   redirect) now points at `/`. Combo cards move from a reflowing CSS grid with a
+   per-card floating/bobbing animation to a horizontally-scrolling `.combo-strip`
+   (fixed-width cards, native scroll + snap) — the wandering/bobbing mechanic
+   stays exclusive to the Basket Builder arena, where it originated; the shared
+   `@keyframes floaty` used by the arena's `.float-chip` is untouched.
+
+> **Status:** Shipped.
+
 ## v0.4.0 — Seasons and polish
 
 | # | Item | Effort | Why now |

@@ -118,6 +118,16 @@ for context on each item. Check items off as they ship.
 - [x] Scrolling ticker banner on `/tips`: top tips by score crawl continuously
       above the normal reactable list, pauses on hover, seamless CSS-only loop
 
+## v0.3.8 — Merge Players into the Leaderboard
+
+- [x] Merge `/players` (today's ranking + all-time standings) into `/` beneath
+      the combo strips; remove the `/players` route, nav link, and static file
+- [x] Combo cards move from a reflowing grid with per-card floating/bobbing to a
+      horizontally-scrolling strip (fixed-width cards, native scroll + snap) —
+      the wandering/bobbing mechanic stays exclusive to the Basket Builder arena
+- [x] Update every remaining `/players` link/redirect (builder locked view,
+      credit-share modal, post-submit redirect) to point at `/`
+
 ## v0.4.0 — Seasons and polish
 
 - [ ] Season table + weekly rollover job; archive past seasons
@@ -144,6 +154,11 @@ for context on each item. Check items off as they ship.
       "over 30" then needs its own visual language once 30 is the top of the bar.
 - [ ] pytest suite: combo total validation, admin auth, snapshot integrity, cascade deletes
 - [ ] GitHub Actions CI: syntax + import check on push
+
+## Done (v0.3.8)
+
+- [x] Players merged into the Leaderboard (`/`), combo cards now a horizontal
+      scroll strip instead of a floating/bobbing grid
 
 ## Done (v0.3.7)
 

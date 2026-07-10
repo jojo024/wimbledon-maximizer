@@ -20,7 +20,7 @@
     </div>
   </section>
 
-  <div class="combo-grid" id="grid"></div>
+  <div class="combo-strip" id="grid"></div>
   <p class="empty-hint" id="empty" style="display:none;text-align:center;margin-top:40px">
     No combos yet — be the first to spend 30 Wimbledons perfectly.
   </p>
@@ -28,7 +28,26 @@
   <section id="honourable-section" style="display:none;margin-top:48px">
     <h2 class="section-title" style="text-align:center">&#127942; Honourable Mentions</h2>
     <p class="section-sub" style="text-align:center">Funky 30-Wimbledon combinations, admin-curated for laughs — not part of the competition ranking.</p>
-    <div class="combo-grid" id="honourable-grid"></div>
+    <div class="combo-strip" id="honourable-grid"></div>
+  </section>
+
+  <section style="margin-top:56px">
+    <h2 class="section-title" style="text-align:center">Players</h2>
+    <p class="section-sub" style="text-align:center">Ranked by <strong>closeness to 30 Wimbledons</strong> — not who spent the
+      most, who maximized best. Miss a day and it counts as W$0 toward your average, so streaks matter.
+      Log today's meals on the <a href="/builder" style="color:var(--green-neon)">Basket Builder</a> page.</p>
+
+    <div class="builder-layout" style="display:grid;grid-template-columns:1fr 1.3fr;gap:24px;align-items:start;margin-top:20px">
+      <div class="panel">
+        <h3 style="margin:0 0 10px">Today's ranking</h3>
+        <div id="today-board"><span class="empty-hint">Loading…</span></div>
+      </div>
+
+      <div class="panel">
+        <h3 style="margin:0 0 10px">All-time standings</h3>
+        <div id="overall-board" class="table-scroll"><span class="empty-hint">Loading…</span></div>
+      </div>
+    </div>
   </section>
 </main>
 
@@ -45,6 +64,45 @@ const grid = document.getElementById("grid");
 const honourableGrid = document.getElementById("honourable-grid");
 const honourableSection = document.getElementById("honourable-section");
 
+const RANK_MEDALS = ["🥇", "🥈", "🥉"];
+function rankBadge(i) { return RANK_MEDALS[i] || `#${i + 1}`; }
+
+async function loadToday() {
+  const box = document.getElementById("today-board");
+  try {
+    const { entries } = await api("GET", "/api/deals/today");
+    box.innerHTML = entries.length
+      ? entries.map((e, i) => `
+          <div class="rank-row${e.mine ? " mine" : ""}">
+            <span class="rank-badge">${rankBadge(i)}</span>
+            <span class="rank-name">${esc(e.name)}</span>
+            <span class="rank-total">${wim(e.total_cents)}</span>
+            <span class="rank-dist">${e.distance_cents === 0 ? "exact!" : `±W$${(e.distance_cents / 100).toFixed(2)}`}</span>
+          </div>`).join("")
+      : `<span class="empty-hint">Nobody has logged a deal today yet — be the first.</span>`;
+  } catch (err) { toast(err.message, true); }
+}
+
+async function loadOverall() {
+  const box = document.getElementById("overall-board");
+  try {
+    const rows = await api("GET", "/api/deals/leaderboard");
+    box.innerHTML = rows.length
+      ? `<table class="admin">
+          <tr><th></th><th>Player</th><th>Avg distance</th><th>Days</th><th>Streak</th></tr>
+          ${rows.map((r, i) => `
+            <tr>
+              <td>${rankBadge(i)}</td>
+              <td>${esc(r.name)}</td>
+              <td>${r.avg_distance_cents === 0 ? "exact!" : `±W$${(r.avg_distance_cents / 100).toFixed(2)}`}</td>
+              <td>${r.days_submitted}/${r.days_tracked}</td>
+              <td>${r.streak > 0 ? `&#128293; ${r.streak}` : "–"}</td>
+            </tr>`).join("")}
+        </table>`
+      : `<span class="empty-hint">No one has logged a Daily Deal yet.</span>`;
+  } catch (err) { toast(err.message, true); }
+}
+
 function sortCombos() {
   const arr = combos.filter(c => !c.honourable);
   if (sortMode === "top") {
@@ -55,9 +113,9 @@ function sortCombos() {
   return arr;
 }
 
-function cardHtml(c, i) {
+function cardHtml(c) {
   return `
-    <article class="card${c.honourable ? " honourable" : ""}" style="animation-delay:${(i * 0.7) % 4}s;animation-duration:${5.5 + (i % 3)}s" data-id="${c.id}">
+    <article class="card${c.honourable ? " honourable" : ""}" data-id="${c.id}">
       ${c.honourable ? `<div class="honourable-badge">&#127942; Honourable mention</div>` : ""}
       <h3>${esc(c.name)}</h3>
       <div class="byline">by ${esc(c.author)}</div>
@@ -234,7 +292,9 @@ document.getElementById("sort-new").onclick = () => { sortMode = "new"; render()
 
 // --- live feed: patch the leaderboard as events arrive ---
 connectFeed(ev => {
-  if (ev.type === "rating") {
+  if (ev.type === "deal") {
+    loadToday(); loadOverall();
+  } else if (ev.type === "rating") {
     patchRating(ev.combo_id, ev.rating_avg, ev.rating_count);
   } else if (ev.type === "comment") {
     patchComments(ev.combo_id, ev.comment_count, ev.top_comment);
@@ -272,6 +332,9 @@ session = await getSession();
 combos = await api("GET", "/api/combos");
 render();
 if (!session.name) namePrompt().then(name => { if (name) session.name = name; render(); });
+
+loadToday();
+loadOverall();
 </script>
 </body>
 </html>

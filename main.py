@@ -496,11 +496,6 @@ def page_meals():
     return FileResponse(STATIC / "meals.html")
 
 
-@app.get("/players")
-def page_players():
-    return FileResponse(STATIC / "players.html")
-
-
 @app.get("/tips")
 def page_tips():
     return FileResponse(STATIC / "tips.html")

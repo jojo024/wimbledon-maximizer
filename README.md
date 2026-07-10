@@ -6,12 +6,11 @@ The game: log the meals you ate today with a price in Wimbledons and an emoji, t
 
 ## Features
 
-- **Live leaderboard** (`/`) — floating glassmorphic combo cards that update in real time over a WebSocket: new combos, ratings, and comments appear with a glow, no refresh. Sort by top rated or newest. The highest-upvoted comment on each combo is surfaced right on the card. A separate **Honourable Mentions** section holds admin-curated, deliberately funky 30-Wimbledon combos — visible and rateable, but never part of the competitive ranking.
+- **Leaderboard** (`/`) — the whole competitive picture on one page. Glassmorphic combo cards sit in a horizontally-scrolling strip and update in real time over a WebSocket: new combos, ratings, and comments appear with a glow, no refresh. Sort by top rated or newest. The highest-upvoted comment on each combo is surfaced right on the card. A separate **Honourable Mentions** strip holds admin-curated, deliberately funky 30-Wimbledon combos — visible and rateable, but never part of the competitive ranking. Underneath, the **Players** section ranks everyone by closeness to 30 Wimbledons: today's board plus an all-time leaderboard (average distance from 30 since your first submission — a skipped day counts as W$0 — and your current streak).
 - **Fair ratings and comments** — one vote per person, enforced server-side via a signed session cookie (not `localStorage`); re-rating updates your existing vote. Comments can be upvoted the same way, and every post's author is your session's own display name — there is no free-text author field anywhere, so nobody can post as someone else.
 - **Session identity** — a lightweight signed cookie issued on first visit; the first time you try to post anything, you're prompted for a display name. Every form shows a read-only "Posting as `<name>`" line — never an editable author box, and the name can't be changed once set, so it's a stable identity across everything you post.
 - **Basket Builder** (`/builder`) — meals and snacks wander and bob around a shopping basket in the middle of the arena, bouncing off it like a wall so they don't drift over the drop zone; drag one in and the chip you're moving bumps nearby ones out of the way. Your in-progress basket autosaves per session, so you can add to it throughout the day and submit whenever you're ready — closing the tab doesn't lose it. A suggestions panel (with a search box) lists pool meals that still fit your remaining budget; click one to add it straight in. Submitting always logs that day's Daily Deal (any total, **one submission per day** — come back tomorrow for another); land on exactly 30 Wimbledons and it *also* enters the competition — one basket, two possible outcomes. Land under 30 with more than the cheapest item's worth of credit left, and a popup offers to generate a fun, shareable barcode for it.
-- **Players** (`/players`) — today's ranking by closeness to 30 Wimbledons, plus an all-time leaderboard: average distance from 30 across every day since your first submission (a skipped day counts as W$0, the worst possible score) and your current daily streak.
-- **Tips & Tricks** (`/tips`) — post advice on maximizing your Wimbledons; react to others' tips with six independent toggles (👍👎🔥❤️😂😢) — several can be active on the same tip at once. Ranked by score (👍 minus 👎); the rest are flavor. Live-updated for everyone watching.
+- **Tips & Tricks** (`/tips`) — post advice on maximizing your Wimbledons; react to others' tips with six independent toggles (👍👎🔥❤️😂😢) — several can be active on the same tip at once. Ranked by score (👍 minus 👎); the rest are flavor. A scrolling ticker banner crawls the top tips across the screen above the normal reactable list. Live-updated for everyone watching.
 - **Add Meals** (`/meals`) — log a meal with name, any price in Wimbledons, and an emoji (a large food/drink picker or type your own); it joins the shared meal pool.
 - **Admin console** (`/admin`) — key-protected; edit or delete any meal, rename or delete combos, **edit a combo's items** (with a live meter enforcing the exactly-30-Wimbledons rule), **create honourable-mention combos** directly, edit or delete comments and tips, reset ratings, and review/delete Daily Deal entries.
 - **Rate limiting** — a per-IP token bucket on all write endpoints (including every admin endpoint) keeps anyone from spamming meals, combos, deals, or comments, or brute-forcing the admin key.
@@ -55,15 +54,16 @@ static/
   wim.js             W$ SVG glyph, currency formatting, nav, fetch helper, toasts, star bars,
                       session/identity helpers, WebSocket feed client, shared floating-basket drag mechanic
   favicon.svg        browser-tab icon (same glyph as WIM_SVG)
-  index.html         leaderboard: floating combo cards, rating, comments, comment upvotes,
-                      plus a separate Honourable Mentions section (admin-curated, unranked)
+  index.html         the leaderboard: combo cards in a horizontally-scrolling strip,
+                      rating, comments, comment upvotes, plus a separate Honourable
+                      Mentions strip (admin-curated, unranked), plus the Players
+                      ranking (today + all-time standings, avg distance, streaks)
   builder.html       drag-and-drop basket arena, autosaved per-user draft, "still fits"
                       suggestions with search; one Daily Deal submission per day, also
                       enters the competition when the total is exactly 30 Wimbledons;
                       cosmetic credit-share barcode (modal) when there's credit left over
-  players.html       today's ranking + all-time standings (avg distance, streaks)
   tips.html          post tips, react with up/down/fire/heart/laugh/cry, sorted by score,
-                      live-updated
+                      scrolling ticker banner for the top tips, live-updated
   meals.html         add-meal form with a large food/drink emoji picker + meal pool listing
   admin.html         admin console (meals / combos / daily deals / comments / tips tabs,
                       combo item editor, honourable-mention combo creator)
