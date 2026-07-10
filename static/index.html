@@ -25,12 +25,6 @@
     No combos yet — be the first to spend 30 Wimbledons perfectly.
   </p>
 
-  <section id="honourable-section" style="display:none;margin-top:48px">
-    <h2 class="section-title" style="text-align:center">&#127942; Honourable Mentions</h2>
-    <p class="section-sub" style="text-align:center">Funky 30-Wimbledon combinations, admin-curated for laughs — not part of the competition ranking.</p>
-    <div class="combo-strip" id="honourable-grid"></div>
-  </section>
-
   <section style="margin-top:56px">
     <h2 class="section-title" style="text-align:center">Players</h2>
     <p class="section-sub" style="text-align:center">Ranked by <strong>closeness to 30 Wimbledons</strong> — not who spent the
@@ -61,8 +55,6 @@ let combos = [];
 let session = { name: "" };
 let sortMode = "top";
 const grid = document.getElementById("grid");
-const honourableGrid = document.getElementById("honourable-grid");
-const honourableSection = document.getElementById("honourable-section");
 
 const RANK_MEDALS = ["🥇", "🥈", "🥉"];
 function rankBadge(i) { return RANK_MEDALS[i] || `#${i + 1}`; }
@@ -104,7 +96,7 @@ async function loadOverall() {
 }
 
 function sortCombos() {
-  const arr = combos.filter(c => !c.honourable);
+  const arr = [...combos];
   if (sortMode === "top") {
     arr.sort((a, b) => b.rating_avg - a.rating_avg || b.rating_count - a.rating_count || b.id - a.id);
   } else {
@@ -115,9 +107,8 @@ function sortCombos() {
 
 function cardHtml(c) {
   return `
-    <article class="card${c.honourable ? " honourable" : ""}" data-id="${c.id}">
-      ${c.honourable ? `<div class="honourable-badge">&#127942; Honourable mention</div>` : ""}
-      <h3>${esc(c.name)}</h3>
+    <article class="card" data-id="${c.id}">
+      <h3>${c.honourable ? "&#127942; " : ""}${esc(c.name)}</h3>
       <div class="byline">by ${esc(c.author)}</div>
       <div class="items">
         ${c.items.map(it => `
@@ -148,15 +139,9 @@ function render() {
   const arr = sortCombos();
   document.getElementById("empty").style.display = arr.length ? "none" : "block";
   grid.innerHTML = arr.map(cardHtml).join("");
-
-  const honourable = combos.filter(c => c.honourable).sort((a, b) => b.id - a.id);
-  honourableSection.style.display = honourable.length ? "block" : "none";
-  honourableGrid.innerHTML = honourable.map(cardHtml).join("");
 }
 
-// Cards live in either grid — combo ids are unique across both, so a single
-// document-wide lookup covers whichever one a given combo rendered into.
-function cardFor(id) { return document.querySelector(`.card[data-id="${id}"]`); }
+function cardFor(id) { return grid.querySelector(`.card[data-id="${id}"]`); }
 
 function topCommentHtml(tc) {
   return `<div class="top-comment">

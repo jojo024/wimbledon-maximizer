@@ -350,6 +350,26 @@ ratings and comments, admin console, W$ glyph, purple/green futuristic theme.
 
 > **Status:** Shipped.
 
+## v0.3.10 — Merge honourable mentions into the main strip
+
+| # | Item | Effort | Why now |
+|---|------|--------|---------|
+| 1 | Drop the separate Honourable Mentions strip; merge into the main combo strip with a trophy-emoji marker | S | User feedback: the split section was unnecessary ceremony for a distinction that only needs a glance, not a whole separate strip |
+
+### Item details
+
+1. **One strip, one marker** — `static/index.html`. `sortCombos()` no longer
+   filters `!c.honourable`, so honourable mentions sort, rate, and comment
+   exactly like player-submitted combos — top-rated/newest now spans all of
+   them together. `cardHtml()` drops the `.honourable` class and the
+   `.honourable-badge` div in favor of prefixing the `<h3>` with a trophy emoji
+   when `c.honourable` is set. The `#honourable-section`/`#honourable-grid`
+   markup, and the now-dead `.card.honourable`/`.honourable-badge` CSS, are
+   removed (`.honourable-tag`, the small inline marker used in `admin.html`'s
+   combos table, is unrelated and stays).
+
+> **Status:** Shipped.
+
 ## v0.4.0 — Seasons and polish
 
 | # | Item | Effort | Why now |

@@ -118,6 +118,14 @@ for context on each item. Check items off as they ship.
 - [x] Scrolling ticker banner on `/tips`: top tips by score crawl continuously
       above the normal reactable list, pauses on hover, seamless CSS-only loop
 
+## v0.3.10 — Merge honourable mentions into the main strip
+
+- [x] Drop the separate Honourable Mentions strip/section; honourable-mention
+      combos now sort, rate, and comment in the main combo strip like any other
+      combo, marked only by a trophy emoji next to the name
+- [x] Remove the now-dead `.card.honourable`/`.honourable-badge` CSS and the
+      `#honourable-section`/`#honourable-grid` markup
+
 ## v0.3.9 — Higher per-item quantity cap
 
 - [x] Raise the per-item qty cap from 20 to 99 (`ComboItemIn`, `SnapshotItemIn`,
@@ -160,6 +168,10 @@ for context on each item. Check items off as they ship.
       "over 30" then needs its own visual language once 30 is the top of the bar.
 - [ ] pytest suite: combo total validation, admin auth, snapshot integrity, cascade deletes
 - [ ] GitHub Actions CI: syntax + import check on push
+
+## Done (v0.3.10)
+
+- [x] Honourable mentions merged into the main combo strip, trophy-emoji marker
 
 ## Done (v0.3.9)
 

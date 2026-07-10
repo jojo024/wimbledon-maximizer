@@ -155,13 +155,8 @@ nav.wim-nav .spacer { flex: 1; }
   box-shadow: 0 0 14px rgba(34, 197, 94, 0.25);
 }
 
-/* admin-curated for-fun combos, kept visually distinct from real competitive entries */
-.card.honourable { border-color: rgba(139, 92, 246, 0.55); }
-.honourable-badge {
-  display: flex; align-items: center; gap: 5px; font-size: 0.72rem; font-weight: 800;
-  text-transform: uppercase; letter-spacing: 0.05em; color: var(--purple-bright);
-  margin-bottom: 8px;
-}
+/* trophy emoji next to an admin-curated honourable-mention combo's name (index.html)
+   or in the admin combos table (admin.html) — the only differentiator, no separate section */
 .honourable-tag { margin-right: 6px; }
 
 .card-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; border-top: 1px solid rgba(139, 92, 246, 0.15); padding-top: 12px; margin-top: 4px; }
