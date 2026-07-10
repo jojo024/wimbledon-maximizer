@@ -118,6 +118,22 @@ for context on each item. Check items off as they ship.
 - [x] Scrolling ticker banner on `/tips`: top tips by score crawl continuously
       above the normal reactable list, pauses on hover, seamless CSS-only loop
 
+## v0.3.12 — Coverflow-style auto-scrolling combo strip
+
+- [x] Combo strip auto-scrolls slowly once there's enough content to overflow
+      (native `scrollLeft`, bounces between the two ends — no content
+      duplication, so ratings/comments stay fully interactive on every card);
+      pauses on hover, while any card's comments panel is open, and for a
+      couple seconds after manual scroll/touch
+- [x] Coverflow-style 3D tilt: `perspective` on the strip + a repeating
+      `rotateY`/`scale` pattern on cards (fixed 4-position cycle, not a
+      per-frame recompute); the hovered/focused/comments-open card always
+      straightens back to flat so rating/commenting stays easy to click
+- [x] Dropped `scroll-snap-type`/`scroll-snap-align` from the strip — a snap
+      container re-snaps to the nearest snap point on every settled scroll,
+      which silently cancelled the auto-scroll's ~0.4px/frame steps back to 0
+      every single frame
+
 ## v0.3.11 — Consistent price formatting, meter rescale
 
 - [x] `fmtW()` always shows two decimals ("7.00", not "7") instead of stripping
@@ -172,6 +188,10 @@ for context on each item. Check items off as they ship.
       (it visualized up to `TARGET * 2` = 60). Fixed in v0.3.11 below.
 - [ ] pytest suite: combo total validation, admin auth, snapshot integrity, cascade deletes
 - [ ] GitHub Actions CI: syntax + import check on push
+
+## Done (v0.3.12)
+
+- [x] Coverflow-style auto-scrolling, 3D-tilted combo strip
 
 ## Done (v0.3.11)
 

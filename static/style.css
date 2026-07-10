@@ -104,12 +104,23 @@ nav.wim-nav .spacer { flex: 1; }
 /* ---------- cards ---------- */
 
 /* Horizontally-scrolling strip (combos, honourable mentions): cards sit still
-   side by side instead of floating in a reflowing grid — drag/scroll to browse. */
+   side by side instead of floating in a reflowing grid — drag/scroll to browse,
+   or let it slowly auto-scroll (see index.html) once there's enough to overflow.
+   No scroll-snap here: a snap container re-snaps to the nearest snap point on
+   every settled scroll, which — at the ~0.4px/frame the auto-scroll moves by —
+   meant it snapped straight back to 0 every single frame and never advanced.
+   perspective + a repeating rotateY/scale pattern gives a coverflow-style wall
+   of depth; a fixed cycle instead of true per-scroll-position math, so it's one
+   CSS rule set rather than a per-frame recompute. */
 .combo-strip {
   display: flex; gap: 26px; margin-top: 26px; padding-bottom: 16px;
-  overflow-x: auto; scroll-snap-type: x proximity;
+  overflow-x: auto;
+  perspective: 1400px;
 }
-.combo-strip .card { flex: 0 0 310px; scroll-snap-align: start; }
+.combo-strip .card { flex: 0 0 310px; }
+.combo-strip .card:nth-child(4n+2) { transform: rotateY(-11deg) scale(0.94); }
+.combo-strip .card:nth-child(4n+3) { transform: rotateY(11deg) scale(0.94); }
+.combo-strip .card:nth-child(4n)   { transform: rotateY(-11deg) scale(0.94); }
 .combo-strip::-webkit-scrollbar { height: 10px; }
 .combo-strip::-webkit-scrollbar-thumb { background: var(--glass-strong); border-radius: 999px; }
 .combo-strip::-webkit-scrollbar-track { background: transparent; }
@@ -123,13 +134,23 @@ nav.wim-nav .spacer { flex: 1; }
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.02) inset;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition: transform 0.3s, border-color 0.2s, box-shadow 0.2s;
 }
 .card:hover,
 .card:focus-within,
 .card:has(.comments.open) {
   border-color: rgba(110, 231, 160, 0.5);
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5), 0 0 26px rgba(110, 231, 160, 0.12);
+}
+/* The card being interacted with straightens and comes forward — coverflow's
+   tilt is a display cue for the rest of the strip, not something you rate or
+   comment through. Matches the nth-child tilt rules' specificity (both are
+   ".combo-strip .card:pseudo") so this — coming later — wins the cascade. */
+.combo-strip .card:hover,
+.combo-strip .card:focus-within,
+.combo-strip .card:has(.comments.open) {
+  transform: none;
+  z-index: 5;
 }
 
 @keyframes floaty {

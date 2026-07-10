@@ -143,6 +143,44 @@ function render() {
 
 function cardFor(id) { return grid.querySelector(`.card[data-id="${id}"]`); }
 
+// Slow, continuous auto-scroll once there are enough combos to overflow the
+// strip — bounces between the two ends rather than looping, so there's never
+// a content jump. Cards stay single DOM nodes (no duplicated-for-looping
+// content like the tips ticker), so ratings/comments keep working normally.
+// Pauses on hover, while a comments panel is open anywhere in the strip, and
+// for a couple seconds after any manual scroll/touch so it never fights you.
+const AUTOSCROLL_PX_PER_SEC = 22;
+let autoScrollDir = 1;
+let autoScrollPausedUntil = 0;
+let gridHovered = false;
+let lastFrameTime = null;
+let scrollPos = 0; // sub-pixel-precise position; grid.scrollLeft itself is integer-rounded and would never accumulate a ~0.4px/frame step
+
+grid.addEventListener("mouseenter", () => { gridHovered = true; });
+grid.addEventListener("mouseleave", () => { gridHovered = false; });
+for (const evt of ["wheel", "touchstart", "pointerdown"]) {
+  grid.addEventListener(evt, () => { autoScrollPausedUntil = Date.now() + 2500; }, { passive: true });
+}
+
+function autoScrollTick(ts) {
+  if (lastFrameTime === null) lastFrameTime = ts;
+  const dt = (ts - lastFrameTime) / 1000;
+  lastFrameTime = ts;
+  const max = grid.scrollWidth - grid.clientWidth;
+  const paused = gridHovered || Date.now() < autoScrollPausedUntil
+    || max <= 0 || grid.querySelector(".comments.open");
+  if (paused) {
+    scrollPos = grid.scrollLeft; // stay in sync with any manual scrolling while paused
+  } else {
+    scrollPos += autoScrollDir * AUTOSCROLL_PX_PER_SEC * dt;
+    if (scrollPos >= max) { scrollPos = max; autoScrollDir = -1; }
+    else if (scrollPos <= 0) { scrollPos = 0; autoScrollDir = 1; }
+    grid.scrollLeft = scrollPos;
+  }
+  requestAnimationFrame(autoScrollTick);
+}
+requestAnimationFrame(autoScrollTick);
+
 function topCommentHtml(tc) {
   return `<div class="top-comment">
     <span class="tc-badge" title="Top comment">&#127942;</span>

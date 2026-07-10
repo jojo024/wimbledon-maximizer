@@ -394,6 +394,44 @@ ratings and comments, admin console, W$ glyph, purple/green futuristic theme.
 
 > **Status:** Shipped.
 
+## v0.3.12 — Coverflow-style auto-scrolling combo strip
+
+| # | Item | Effort | Why now |
+|---|------|--------|---------|
+| 1 | Combo strip slowly auto-scrolls, with a 3D coverflow tilt | M | User request: "when we get more combos I would like the combos to slowly scroll in 3D" |
+
+### Item details
+
+1. **Auto-scroll** — `static/index.html`. A `requestAnimationFrame` loop nudges
+   `grid.scrollLeft` at a constant ~22px/sec, bouncing between 0 and
+   `scrollWidth - clientWidth` instead of looping — no wraparound jump, and no
+   duplicated cards (unlike the tips ticker), so every card stays a single DOM
+   node and ratings/comments keep working normally on all of them. A separate
+   `scrollPos` float accumulates the sub-pixel-precise position each frame;
+   `grid.scrollLeft` itself is an integer property, and assigning it directly
+   from itself each frame (`grid.scrollLeft + tinyStep`) rounds the ~0.4px/frame
+   step down to zero forever — this was caught and fixed during testing.
+   Auto-scroll pauses on hover, while any card's comments panel is open
+   (`grid.querySelector(".comments.open")`), and for 2.5s after any manual
+   wheel/touch/pointer interaction so it never fights the visitor.
+2. **Coverflow tilt** — `static/style.css`. `.combo-strip` gets `perspective:
+   1400px`; cards cycle through a fixed 4-position `nth-child` pattern
+   (flat → tilt → tilt the other way → tilt) via `rotateY`/`scale` — a repeating
+   visual wave rather than true per-scroll-position math, so it's one CSS rule
+   set instead of a per-frame recompute. The hovered/focused/comments-open card
+   straightens to flat (`transform: none`) so rating stars and the comment
+   button stay easy to click through — coverflow's tilt is a display cue for
+   the rest of the strip, not something you interact through.
+   `scroll-snap-type`/`scroll-snap-align` had to come off the strip: a snap
+   container re-snaps to the nearest snap point on every settled scroll, and at
+   an ~0.4px/frame step that meant it snapped straight back to 0 every frame,
+   silently cancelling the auto-scroll entirely — caught during testing via a
+   real Playwright-driven browser (this repo has no browser automation set up
+   normally; `playwright-core` pointed at the machine's existing Chrome install
+   was used one-off for this verification).
+
+> **Status:** Shipped.
+
 ## v0.4.0 — Seasons and polish
 
 | # | Item | Effort | Why now |
