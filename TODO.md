@@ -118,6 +118,17 @@ for context on each item. Check items off as they ship.
 - [x] Scrolling ticker banner on `/tips`: top tips by score crawl continuously
       above the normal reactable list, pauses on hover, seamless CSS-only loop
 
+## v0.3.13 — Strawberry Rush integration
+
+- [x] Mount [jojo024/strawberry-rush](https://github.com/jojo024/strawberry-rush)
+      (a separate repo, zero-dependency static Canvas game) read-only at `/play`
+      via `StaticFiles`, pointed at a sibling checkout (`WIM_GAME_DIR`, default
+      `../strawberry-rush`) — no submodule, no shared build, no code import;
+      `/play` is silently disabled if the directory isn't there
+- [x] "🍓 Play" nav link
+- [x] Deploy docs for the two-repo setup: optional sibling clone step, and
+      "updating the game needs a git pull there, not a restart of this service"
+
 ## v0.3.12 — Coverflow-style auto-scrolling combo strip
 
 - [x] Combo strip auto-scrolls slowly once there's enough content to overflow
@@ -188,6 +199,10 @@ for context on each item. Check items off as they ship.
       (it visualized up to `TARGET * 2` = 60). Fixed in v0.3.11 below.
 - [ ] pytest suite: combo total validation, admin auth, snapshot integrity, cascade deletes
 - [ ] GitHub Actions CI: syntax + import check on push
+
+## Done (v0.3.13)
+
+- [x] Strawberry Rush mounted at /play (separate repo, sibling checkout), nav link
 
 ## Done (v0.3.12)
 

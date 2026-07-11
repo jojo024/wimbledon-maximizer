@@ -57,6 +57,7 @@ Single-process FastAPI app, everything in `main.py`:
 4. **Live feed** — `/ws/feed` WebSocket; `ConnectionManager` broadcasts `combo_new`/`combo_update`/`combo_delete`/`rating`/`comment`/`comment_vote`/`deal`/`tip_new`/`tip_react`/`tip_update`/`tip_delete` events fired from `notify()` after each write.
 5. **Admin API** — all under `/api/admin/*`, guarded by `require_admin()` comparing the `X-Admin-Key` header to `WIM_ADMIN_KEY`. Covers meals, combos (incl. item editor preserving the 3000-cent invariant, and `POST /api/admin/combos` to create an honourable-mention combo directly), ratings, comments (edit + delete), daily deals, and tips (edit + delete).
 6. **Pages** — `/`, `/builder`, `/tips`, `/meals`, `/admin` serve files from `static/`; assets mount at `/static`.
+7. **Strawberry Rush** (`/play`) — a completely separate repo ([jojo024/strawberry-rush](https://github.com/jojo024/strawberry-rush): zero-dependency static Canvas game, own git history/README/release cadence). Mounted read-only via `StaticFiles(directory=GAME_DIR, html=True)` if `GAME_DIR` (`WIM_GAME_DIR`, default `../strawberry-rush` — a sibling checkout) exists; otherwise `/play` is silently disabled with a one-line startup note. This app never imports, builds, or otherwise depends on any of its code — updating it is a `git pull` in that other checkout, no restart of this service required (StaticFiles reads from disk per-request, not from a cached manifest built at startup).
 
 Frontend is plain ES modules, no build step, no external requests (works fully offline):
 

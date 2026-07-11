@@ -432,6 +432,32 @@ ratings and comments, admin console, W$ glyph, purple/green futuristic theme.
 
 > **Status:** Shipped.
 
+## v0.3.13 — Strawberry Rush integration
+
+| # | Item | Effort | Why now |
+|---|------|--------|---------|
+| 1 | Mount [jojo024/strawberry-rush](https://github.com/jojo024/strawberry-rush) at `/play` | S | User wants a companion arcade game (thematically already on-brand — a "broadcast engineer crosses a posh Wimbledon crowd," strawberries as currency) developed as its own repo, not folded into this one |
+
+### Item details
+
+1. **Sibling-checkout mount, not a submodule** — `main.py`. `GAME_DIR =
+   Path(os.environ.get("WIM_GAME_DIR", str(BASE.parent / "strawberry-rush")))`,
+   mounted via `app.mount("/play", StaticFiles(directory=GAME_DIR, html=True))`
+   only `if GAME_DIR.is_dir()` — otherwise a one-line startup note and `/play`
+   simply doesn't exist, so this app runs fine on a machine that never cloned
+   the game. Considered a git submodule instead: rejected, since submodules
+   couple the two repos' commit histories together (detached HEAD, an extra
+   `git submodule update` step, easy for a contributor to forget) for no real
+   benefit here — strawberry-rush is a complete, independently-versioned
+   zero-dependency static site, not a library this app needs to build against.
+   A fully separate subdomain/deployment was also considered and rejected as
+   more operationally separate than the user wanted — this keeps one process,
+   one domain, one Caddy config, while the two codebases stay fully
+   independent git histories on disk.
+   `static/wim.js`'s `renderNav()` gets a "🍓 Play" link.
+
+> **Status:** Shipped.
+
 ## v0.4.0 — Seasons and polish
 
 | # | Item | Effort | Why now |

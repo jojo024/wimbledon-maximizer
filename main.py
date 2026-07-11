@@ -22,6 +22,11 @@ DB_PATH = BASE / "wimbledon.db"
 STATIC = BASE / "static"
 SECRET_PATH = BASE / ".wim_secret"
 ADMIN_KEY = os.environ.get("WIM_ADMIN_KEY", "wimbledon")
+# Strawberry Rush is a separate repo (github.com/jojo024/strawberry-rush) — a
+# zero-dependency static Canvas game, cloned as a sibling checkout and served
+# read-only under /play. It has its own git history, its own README, and its
+# own release cadence; this app never imports or builds any part of it.
+GAME_DIR = Path(os.environ.get("WIM_GAME_DIR", str(BASE.parent / "strawberry-rush")))
 TARGET_CENTS = 3000  # exactly W$30.00
 HOST = os.environ.get("WIM_HOST", "0.0.0.0")
 PORT = int(os.environ.get("WIM_PORT", "8030"))
@@ -266,6 +271,12 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Wimbledon$ Maximizer", lifespan=lifespan)
 init_db()
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
+if GAME_DIR.is_dir():
+    app.mount("/play", StaticFiles(directory=GAME_DIR, html=True), name="play")
+else:
+    print(f"NOTE: Strawberry Rush not found at {GAME_DIR} — /play is disabled."
+          f" Clone github.com/jojo024/strawberry-rush there (or set"
+          f" WIM_GAME_DIR) to enable it.", flush=True)
 
 
 # ---------- request origin (proxy-aware) ----------

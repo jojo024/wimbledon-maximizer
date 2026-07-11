@@ -36,6 +36,7 @@ On first run `wimbledon.db` (SQLite) is created next to `main.py` and seeded wit
 | `WIM_PORT` | `8030` | HTTP port |
 | `WIM_SECRET` | auto-generated | HMAC secret for signing session cookies. If unset, a random secret is generated once and persisted to `.wim_secret` (gitignored) so sessions survive restarts. |
 | `WIM_FORWARDED_ALLOW_IPS` | `127.0.0.1` | Passed straight to uvicorn's `forwarded_allow_ips`: only connections from these addresses have their `X-Forwarded-For`/`X-Forwarded-Proto` headers trusted for the real client IP/scheme (used by rate limiting and the cookie's `Secure` flag). The default matches the documented `WIM_HOST=127.0.0.1`-behind-Caddy setup; leave it alone unless your reverse proxy runs somewhere else. |
+| `WIM_GAME_DIR` | `../strawberry-rush` | Path to a [strawberry-rush](https://github.com/jojo024/strawberry-rush) checkout, served read-only at `/play`. If the directory doesn't exist, `/play` is simply disabled (a one-line startup note, not an error) — this app runs fine without it. |
 
 Change the admin key before letting anyone else reach this — on a LAN or the internet.
 
@@ -74,6 +75,15 @@ deploy/
   wimbledon-maximizer.service        systemd unit (Restart=on-failure)
   wimbledon-maximizer.env.example    template for the real env file (gitignored)
 ```
+
+Not part of this repo, but expected as a **sibling directory** one level up
+(`../strawberry-rush`, override with `WIM_GAME_DIR`): a checkout of
+[jojo024/strawberry-rush](https://github.com/jojo024/strawberry-rush), a
+separate zero-dependency static Canvas game with its own git history, README,
+and release cadence. This app mounts it read-only at `/play` (`StaticFiles`,
+no build step, no import of its code) if the directory is present, and simply
+disables `/play` if it isn't — the two repos are updated independently:
+`git pull` in each, then restart this app to pick up a newer strawberry-rush.
 
 ## API overview
 
@@ -152,6 +162,11 @@ cd /opt/wimbledon-maximizer
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 
+# 3b. Optional: Strawberry Rush (separate repo, enables /play) as a sibling
+#     checkout — /opt/strawberry-rush, next to /opt/wimbledon-maximizer.
+#     Skip this and /play just stays disabled; nothing else depends on it.
+git clone https://github.com/jojo024/strawberry-rush.git /opt/strawberry-rush
+
 # 4. Configure secrets
 cp deploy/wimbledon-maximizer.env.example deploy/wimbledon-maximizer.env
 nano deploy/wimbledon-maximizer.env   # set a real WIM_ADMIN_KEY
@@ -159,6 +174,7 @@ nano deploy/wimbledon-maximizer.env   # set a real WIM_ADMIN_KEY
 # 5. Run it as a service
 sudo useradd -r -s /usr/sbin/nologin wimbledon || true
 sudo chown -R wimbledon:wimbledon /opt/wimbledon-maximizer
+sudo chown -R wimbledon:wimbledon /opt/strawberry-rush 2>/dev/null || true  # only if step 3b was done
 sudo cp deploy/wimbledon-maximizer.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now wimbledon-maximizer
@@ -191,6 +207,11 @@ every startup and only ever *adds* tables/columns (`CREATE TABLE IF NOT EXISTS`,
 guarded `ALTER TABLE ... ADD COLUMN`), so a schema change ships the same way as a
 one-line copy fix — no separate migration step, and the live `wimbledon.db` is
 never dropped or recreated by a restart.
+
+Strawberry Rush is a fully separate deploy, on its own schedule: `cd
+/opt/strawberry-rush && git pull` picks up a new version — no restart of the
+wimbledon-maximizer service needed, since it's served directly off disk by
+`StaticFiles` on every request, not loaded into the process at startup.
 
 A few habits worth keeping as this grows:
 - `sudo journalctl -u wimbledon-maximizer -f` to watch logs / catch the startup
