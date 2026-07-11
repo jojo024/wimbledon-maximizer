@@ -118,6 +118,13 @@ for context on each item. Check items off as they ship.
 - [x] Scrolling ticker banner on `/tips`: top tips by score crawl continuously
       above the normal reactable list, pauses on hover, seamless CSS-only loop
 
+## v0.3.14 — Basket Builder search box clarity
+
+- [x] "Search meals" box redesigned to match the "Combo name" field's visual
+      weight (label stacked above a full-width input, not a small 140px pill
+      squeezed next to its label) — users kept typing meal searches into the
+      much more prominent Combo name box by mistake
+
 ## v0.3.13 — Strawberry Rush integration
 
 - [x] Mount [jojo024/strawberry-rush](https://github.com/jojo024/strawberry-rush)
@@ -199,6 +206,10 @@ for context on each item. Check items off as they ship.
       (it visualized up to `TARGET * 2` = 60). Fixed in v0.3.11 below.
 - [ ] pytest suite: combo total validation, admin auth, snapshot integrity, cascade deletes
 - [ ] GitHub Actions CI: syntax + import check on push
+
+## Done (v0.3.14)
+
+- [x] Basket Builder search box redesigned for clarity against Combo name
 
 ## Done (v0.3.13)
 

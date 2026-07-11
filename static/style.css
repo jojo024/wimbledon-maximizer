@@ -404,9 +404,12 @@ label.f { display: flex; flex-direction: column; gap: 6px; font-size: 0.85rem; c
 /* ---------- basket-builder suggestions ---------- */
 
 .suggestions { margin-top: 18px; border-top: 1px dashed rgba(139, 92, 246, 0.25); padding-top: 14px; }
-.suggest-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+/* Label stacked above a full-width search input — matches the "Combo name"
+   field's own layout/weight one panel up, so the two don't visually compete
+   and people stop typing meal searches into the combo-name box by mistake. */
+.suggest-header { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
 .suggest-label { font-size: 0.78rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; }
-.suggest-search { padding: 5px 12px; font-size: 0.82rem; border-radius: 999px; width: 140px; }
+.suggest-search { width: 100%; }
 .suggest-chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .suggest-more { font-size: 0.78rem; color: var(--muted); font-style: italic; }
 .suggest-chip {

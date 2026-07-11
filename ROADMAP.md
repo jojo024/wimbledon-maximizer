@@ -458,6 +458,29 @@ ratings and comments, admin console, W$ glyph, purple/green futuristic theme.
 
 > **Status:** Shipped.
 
+## v0.3.14 — Basket Builder search box clarity
+
+| # | Item | Effort | Why now |
+|---|------|--------|---------|
+| 1 | Redesign the "Search meals" box to match the "Combo name" field's visual weight | XS | User report: people kept typing meal searches into the Combo name box by mistake |
+
+### Item details
+
+1. **Search box redesign** — `static/style.css` (`.suggest-header`/`.suggest-search`).
+   The search input was a small 140px pill (`padding: 5px 12px`,
+   `border-radius: 999px`, `font-size: 0.82rem`) squeezed into a header row next
+   to its label — visually an afterthought compared to the full-width, normal-
+   sized "Combo name" input directly above it in the same sidebar panel, which
+   is exactly what people defaulted to typing meal searches into.
+   `.suggest-header` switches from a `space-between` row to a stacked column
+   (label above input, matching `label.f`'s own layout one field up), and
+   `.suggest-search` drops its pill overrides entirely — it now inherits the
+   same full-width, normal `input`/`textarea`/`select` styling as every other
+   text field on the page, so the two inputs read as equally "real" instead of
+   one looking like the obvious one and the other like a filter chip.
+
+> **Status:** Shipped.
+
 ## v0.4.0 — Seasons and polish
 
 | # | Item | Effort | Why now |
