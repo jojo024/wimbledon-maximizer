@@ -68,6 +68,7 @@ export function renderNav(active) {
     ["/tips", "Tips & Tricks"],
     ["/meals", "Add Meals"],
     ["/play", "🍓 Play"],
+    ["/wordle", "🎛 Wordle"],
     ["/admin", "Admin"],
   ];
   const nav = document.createElement("nav");

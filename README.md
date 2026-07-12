@@ -37,6 +37,7 @@ On first run `wimbledon.db` (SQLite) is created next to `main.py` and seeded wit
 | `WIM_SECRET` | auto-generated | HMAC secret for signing session cookies. If unset, a random secret is generated once and persisted to `.wim_secret` (gitignored) so sessions survive restarts. |
 | `WIM_FORWARDED_ALLOW_IPS` | `127.0.0.1` | Passed straight to uvicorn's `forwarded_allow_ips`: only connections from these addresses have their `X-Forwarded-For`/`X-Forwarded-Proto` headers trusted for the real client IP/scheme (used by rate limiting and the cookie's `Secure` flag). The default matches the documented `WIM_HOST=127.0.0.1`-behind-Caddy setup; leave it alone unless your reverse proxy runs somewhere else. |
 | `WIM_GAME_DIR` | `../strawberry-rush` | Path to a [strawberry-rush](https://github.com/jojo024/strawberry-rush) checkout, served read-only at `/play`. If the directory doesn't exist, `/play` is simply disabled (a one-line startup note, not an error) — this app runs fine without it. |
+| `WIM_WORDLE_DIR` | `../broadcast-wordle/dist` | Path to a **built** [broadcast-wordle](https://github.com/NickPoopy/broadcast-wordle) (`VITE_BASE_PATH=/wordle/ npm run build` in that checkout), served read-only at `/wordle`. Same graceful disable if missing. |
 
 Change the admin key before letting anyone else reach this — on a LAN or the internet.
 
@@ -76,14 +77,21 @@ deploy/
   wimbledon-maximizer.env.example    template for the real env file (gitignored)
 ```
 
-Not part of this repo, but expected as a **sibling directory** one level up
-(`../strawberry-rush`, override with `WIM_GAME_DIR`): a checkout of
-[jojo024/strawberry-rush](https://github.com/jojo024/strawberry-rush), a
-separate zero-dependency static Canvas game with its own git history, README,
-and release cadence. This app mounts it read-only at `/play` (`StaticFiles`,
-no build step, no import of its code) if the directory is present, and simply
-disables `/play` if it isn't — the two repos are updated independently:
-`git pull` in each, then restart this app to pick up a newer strawberry-rush.
+Not part of this repo, but expected as **sibling directories** one level up
+(overridable with `WIM_GAME_DIR` / `WIM_WORDLE_DIR`), each mounted read-only
+and with no import of its code:
+
+- `../strawberry-rush` — [jojo024/strawberry-rush](https://github.com/jojo024/strawberry-rush),
+  a zero-dependency static Canvas game. Served straight off its checkout at
+  `/play`; a `git pull` there is the entire update, no rebuild needed.
+- `../broadcast-wordle/dist` — [NickPoopy/broadcast-wordle](https://github.com/NickPoopy/broadcast-wordle),
+  a Vite/React app, so unlike the other one it needs an actual build:
+  `VITE_BASE_PATH=/wordle/ npm run build` in that checkout produces the
+  `dist/` this app serves at `/wordle`. Updating it is `git pull` **then**
+  rebuild — the `dist/` from the last build keeps serving until you do.
+
+Both are optional: if a directory isn't present, its route is simply disabled
+(a one-line startup note, not an error) and everything else runs normally.
 
 ## API overview
 
@@ -167,6 +175,21 @@ python3 -m venv .venv
 #     Skip this and /play just stays disabled; nothing else depends on it.
 git clone https://github.com/jojo024/strawberry-rush.git /opt/strawberry-rush
 
+# 3c. Optional: Broadcast Wordle (separate repo, enables /wordle) — this one
+#     needs an actual build (it's Vite/React, not zero-dependency static files),
+#     which needs Node 20+. Ubuntu's own `apt install nodejs` gives you
+#     whatever old version is in the distro repos (18.x on 22.04) — use
+#     NodeSource instead, or the build fails with "Dynamic require of
+#     workbox-build is not supported" deep in vite-plugin-pwa.
+#     Skip all of this and /wordle just stays disabled; nothing else depends on it.
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs
+git clone https://github.com/NickPoopy/broadcast-wordle.git /opt/broadcast-wordle
+cd /opt/broadcast-wordle
+npm ci
+VITE_BASE_PATH=/wordle/ npm run build
+cd /opt/wimbledon-maximizer
+
 # 4. Configure secrets
 cp deploy/wimbledon-maximizer.env.example deploy/wimbledon-maximizer.env
 nano deploy/wimbledon-maximizer.env   # set a real WIM_ADMIN_KEY
@@ -175,6 +198,7 @@ nano deploy/wimbledon-maximizer.env   # set a real WIM_ADMIN_KEY
 sudo useradd -r -s /usr/sbin/nologin wimbledon || true
 sudo chown -R wimbledon:wimbledon /opt/wimbledon-maximizer
 sudo chown -R wimbledon:wimbledon /opt/strawberry-rush 2>/dev/null || true  # only if step 3b was done
+sudo chown -R wimbledon:wimbledon /opt/broadcast-wordle 2>/dev/null || true # only if step 3c was done
 sudo cp deploy/wimbledon-maximizer.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now wimbledon-maximizer
@@ -212,6 +236,12 @@ Strawberry Rush is a fully separate deploy, on its own schedule: `cd
 /opt/strawberry-rush && git pull` picks up a new version — no restart of the
 wimbledon-maximizer service needed, since it's served directly off disk by
 `StaticFiles` on every request, not loaded into the process at startup.
+
+Broadcast Wordle is separate too, but needs its build step re-run since
+`/wordle` serves its `dist/`, not its source: `cd /opt/broadcast-wordle && git
+pull && npm ci && VITE_BASE_PATH=/wordle/ npm run build` — no restart of the
+wimbledon-maximizer service needed either, same reasoning as above. The old
+`dist/` keeps serving without interruption until the new build finishes.
 
 A few habits worth keeping as this grows:
 - `sudo journalctl -u wimbledon-maximizer -f` to watch logs / catch the startup

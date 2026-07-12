@@ -27,6 +27,12 @@ ADMIN_KEY = os.environ.get("WIM_ADMIN_KEY", "wimbledon")
 # read-only under /play. It has its own git history, its own README, and its
 # own release cadence; this app never imports or builds any part of it.
 GAME_DIR = Path(os.environ.get("WIM_GAME_DIR", str(BASE.parent / "strawberry-rush")))
+# Broadcast Wordle (github.com/NickPoopy/broadcast-wordle) is likewise a
+# separate repo, but a built Vite/React app rather than zero-dependency static
+# files — WORDLE_DIR points at its *built* `dist/`, produced with
+# `VITE_BASE_PATH=/wordle/ npm run build` in that other checkout, not at the
+# repo root. Same read-only, no-import mounting as Strawberry Rush otherwise.
+WORDLE_DIR = Path(os.environ.get("WIM_WORDLE_DIR", str(BASE.parent / "broadcast-wordle" / "dist")))
 TARGET_CENTS = 3000  # exactly W$30.00
 HOST = os.environ.get("WIM_HOST", "0.0.0.0")
 PORT = int(os.environ.get("WIM_PORT", "8030"))
@@ -277,6 +283,13 @@ else:
     print(f"NOTE: Strawberry Rush not found at {GAME_DIR} — /play is disabled."
           f" Clone github.com/jojo024/strawberry-rush there (or set"
           f" WIM_GAME_DIR) to enable it.", flush=True)
+if WORDLE_DIR.is_dir():
+    app.mount("/wordle", StaticFiles(directory=WORDLE_DIR, html=True), name="wordle")
+else:
+    print(f"NOTE: Broadcast Wordle build not found at {WORDLE_DIR} — /wordle is"
+          f" disabled. Clone github.com/NickPoopy/broadcast-wordle as a sibling"
+          f" checkout and run 'VITE_BASE_PATH=/wordle/ npm run build' there (or"
+          f" set WIM_WORDLE_DIR) to enable it.", flush=True)
 
 
 # ---------- request origin (proxy-aware) ----------

@@ -118,6 +118,21 @@ for context on each item. Check items off as they ship.
 - [x] Scrolling ticker banner on `/tips`: top tips by score crawl continuously
       above the normal reactable list, pauses on hover, seamless CSS-only loop
 
+## v0.3.15 — Broadcast Wordle integration
+
+- [x] Mount [NickPoopy/broadcast-wordle](https://github.com/NickPoopy/broadcast-wordle)
+      (separate repo, Vite/React/TypeScript, MIT-licensed) read-only at
+      `/wordle` via `StaticFiles`, pointed at the *built* `dist/` of a sibling
+      checkout (`WIM_WORDLE_DIR`, default `../broadcast-wordle/dist`) — its
+      `vite.config.ts` already supports a `VITE_BASE_PATH` env var for
+      sub-path hosting, built with `VITE_BASE_PATH=/wordle/ npm run build`
+- [x] "🎛 Wordle" nav link
+- [x] Deploy docs: Node 20+ via NodeSource (not distro `apt install nodejs`,
+      which is too old and breaks `vite-plugin-pwa`'s workbox-build step with
+      "Dynamic require of workbox-build is not supported"), the build command,
+      and "rebuild needed on update, not just git pull, since /wordle serves
+      dist/ not source"
+
 ## v0.3.14 — Basket Builder search box clarity
 
 - [x] "Search meals" box redesigned to match the "Combo name" field's visual
@@ -206,6 +221,10 @@ for context on each item. Check items off as they ship.
       (it visualized up to `TARGET * 2` = 60). Fixed in v0.3.11 below.
 - [ ] pytest suite: combo total validation, admin auth, snapshot integrity, cascade deletes
 - [ ] GitHub Actions CI: syntax + import check on push
+
+## Done (v0.3.15)
+
+- [x] Broadcast Wordle mounted at /wordle (separate repo, built dist/), nav link
 
 ## Done (v0.3.14)
 
