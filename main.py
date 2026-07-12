@@ -33,6 +33,7 @@ GAME_DIR = Path(os.environ.get("WIM_GAME_DIR", str(BASE.parent / "strawberry-rus
 # `VITE_BASE_PATH=/wordle/ npm run build` in that other checkout, not at the
 # repo root. Same read-only, no-import mounting as Strawberry Rush otherwise.
 WORDLE_DIR = Path(os.environ.get("WIM_WORDLE_DIR", str(BASE.parent / "broadcast-wordle" / "dist")))
+RUNNER_DIR = Path(os.environ.get("WIM_RUNNER_DIR", str(BASE.parent / "buggyrunner" / "dist")))
 TARGET_CENTS = 3000  # exactly W$30.00
 HOST = os.environ.get("WIM_HOST", "0.0.0.0")
 PORT = int(os.environ.get("WIM_PORT", "8030"))
@@ -502,6 +503,14 @@ def top_comment(conn, combo_id: int) -> dict | None:
         return None
     return {"author": row["author"], "text": row["text"], "votes": row["votes"]}
 
+
+if RUNNER_DIR.is_dir():
+    app.mount("/runner", StaticFiles(directory=RUNNER_DIR, html=True), name="runner")
+else:
+    print(f"NOTE: BuggyRunner build not found at {RUNNER_DIR} — /runner is"
+          f" disabled. Clone github.com/NickPoopy/buggyrunner as a sibling"
+          f" checkout and run 'VITE_BASE_PATH=/runner/ npm run build' there (or"
+          f" set WIM_RUNNER_DIR) to enable it.", flush=True)
 
 # ---------- pages ----------
 
