@@ -118,6 +118,26 @@ for context on each item. Check items off as they ship.
 - [x] Scrolling ticker banner on `/tips`: top tips by score crawl continuously
       above the normal reactable list, pauses on hover, seamless CSS-only loop
 
+## v0.3.16 — Games hub + BuggyRunner integration
+
+- [x] `/play` becomes a hub page listing every companion game (was a direct
+      mount of Strawberry Rush) — fetches `GET /api/games`, renders a card
+      per entry with a Play link, or a disabled note if not present on this
+      deployment; games move to `/play/<slug>` (`/play/strawberry-rush`,
+      `/play/wordle`, `/play/buggyrunner`)
+- [x] Mount [NickPoopy/buggyrunner](https://github.com/NickPoopy/buggyrunner)
+      (separate repo, Vite + Phaser, MIT-licensed) at `/play/buggyrunner` —
+      same built-`dist/`-sibling-checkout pattern as Broadcast Wordle, but its
+      own env var name (`BASE_PATH`, not `VITE_BASE_PATH`)
+- [x] `main.py`'s `GAMES` list (slug/name/emoji/description/dir/repo) drives
+      the mount loop, the disabled-state log line, and `/api/games` from one
+      place — adding a game means one list entry, not three separate spots
+- [x] Nav simplified to a single "🎮 Play" link (was a separate top-level
+      entry per game, which wouldn't have scaled)
+- [x] README § "Adding another game" — generalized, repo-agnostic runbook for
+      integrating any future game, including the Windows/Git-Bash path-mangling
+      gotcha (`MSYS_NO_PATHCONV=1`) hit while building these
+
 ## v0.3.15 — Broadcast Wordle integration
 
 - [x] Mount [NickPoopy/broadcast-wordle](https://github.com/NickPoopy/broadcast-wordle)
@@ -222,9 +242,14 @@ for context on each item. Check items off as they ship.
 - [ ] pytest suite: combo total validation, admin auth, snapshot integrity, cascade deletes
 - [ ] GitHub Actions CI: syntax + import check on push
 
+## Done (v0.3.16)
+
+- [x] /play is now a games hub (BuggyRunner added, all games moved to
+      /play/<slug>), driven by one GAMES list + /api/games
+
 ## Done (v0.3.15)
 
-- [x] Broadcast Wordle mounted at /wordle (separate repo, built dist/), nav link
+- [x] Broadcast Wordle mounted (separate repo, built dist/), nav link
 
 ## Done (v0.3.14)
 

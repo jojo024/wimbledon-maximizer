@@ -67,8 +67,7 @@ export function renderNav(active) {
     ["/builder", "Basket Builder"],
     ["/tips", "Tips & Tricks"],
     ["/meals", "Add Meals"],
-    ["/play", "🍓 Play"],
-    ["/wordle", "🎛 Wordle"],
+    ["/play", "🎮 Play"],
     ["/admin", "Admin"],
   ];
   const nav = document.createElement("nav");

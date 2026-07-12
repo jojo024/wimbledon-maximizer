@@ -503,7 +503,9 @@ ratings and comments, admin console, W$ glyph, purple/green futuristic theme.
    (`playwright-core` against the machine's existing Chrome, same one-off
    approach as the coverflow-scroll testing): page loads, a guess types and
    colors correctly, zero console errors.
-   `static/wim.js`'s `renderNav()` gets a "🎛 Wordle" link.
+   `static/wim.js`'s `renderNav()` gets a "🎛 Wordle" link (superseded in
+   v0.3.16 — see below — once a second game made a per-game nav entry stop
+   scaling).
 2. **Deploy note: Node version matters here** — unlike Strawberry Rush (no
    build, no Node needed at all), this one needs Node 20+ to build. Discovered
    live during the first production deploy attempt: Ubuntu's `apt install
@@ -513,6 +515,61 @@ ratings and comments, admin console, W$ glyph, purple/green futuristic theme.
    interop gap, not a config mistake. Fixed by installing Node 20+ via
    NodeSource instead of the distro package; documented in README's deploy
    steps so the next setup doesn't hit the same wall.
+
+> **Status:** Shipped.
+
+## v0.3.16 — Games hub + BuggyRunner integration
+
+| # | Item | Effort | Why now |
+|---|------|--------|---------|
+| 1 | Turn `/play` into a hub listing every companion game, add BuggyRunner | M | A third game meant a direct-mount-per-path scheme (`/play` = Strawberry Rush, `/wordle` = Wordle) stopped making sense — the user asked directly for "/play give you an overview of all the games ... select it there and play from there" |
+
+### Item details
+
+1. **`GAMES` as the single source of truth** — `main.py`. A list of dicts
+   (`slug`, `name`, `emoji`, `description`, `dir`, `repo`) replaces three
+   separate `if ..._DIR.is_dir(): app.mount(...)` blocks. The startup mount
+   loop iterates it once (`/play/<slug>` per entry, one-line NOTE for any
+   missing `dir`), and `GET /api/games` returns the same list with `dir`
+   swapped for a computed `available` bool — no separate bookkeeping between
+   what gets mounted and what the hub page can show. Existing constants
+   (`GAME_DIR`, `WORDLE_DIR`) are unchanged, just referenced from the list
+   instead of three standalone `if` blocks; `RUNNER_DIR` (added — see below)
+   joins them the same way.
+2. **`/play` hub page** — `static/play.html` (new) + `GET /api/games`
+   (new). The page fetches the endpoint and renders a `.game-card` per entry:
+   emoji, name, description, and a "Play" link to `/play/<slug>/` if
+   `available`, otherwise a disabled-looking card with a "not available on
+   this deployment" note — mirroring the graceful degrade the mounts
+   themselves already do. `/play` was previously a direct `StaticFiles` mount
+   of Strawberry Rush; that's now `/play/strawberry-rush`, and Broadcast
+   Wordle moved from top-level `/wordle` to `/play/wordle` for the same
+   reason — one consistent `/play/<slug>` shape for every game, current and
+   future. This is a breaking change to those two URLs, done deliberately per
+   the user's explicit request rather than preserved for compatibility.
+3. **BuggyRunner** (`/play/buggyrunner`, [NickPoopy/buggyrunner](https://github.com/NickPoopy/buggyrunner))
+   — another separate, MIT-licensed repo, Vite + Phaser this time (a game
+   framework, not a UI framework — first of the three). Same built-`dist/`
+   sibling-checkout shape as Broadcast Wordle, but its own build env var name:
+   `BASE_PATH` (not `VITE_BASE_PATH`) — confirmed by reading its own
+   `vite.config.ts` rather than assuming it matched Wordle's. `RUNNER_DIR`
+   (`WIM_RUNNER_DIR`, default `../buggyrunner/dist`) follows the same
+   pattern as `WORDLE_DIR`. A partial, buggy version of this mount
+   (`WIM_RUNNER_DIR` pointed at `/runner` with the wrong env var name in its
+   log message) had already been committed directly by the user as a "quick
+   fix" between sessions; folded into the proper `GAMES`-list version here
+   rather than left as a fourth, inconsistent mount path.
+4. **Nav simplified** — `static/wim.js`. One "🎮 Play" link replaces what
+   would otherwise become one nav entry per game (already two: "🍓 Play" and
+   "🎛 Wordle") — doesn't scale past a handful of games and the hub page is
+   now the actual discovery mechanism.
+5. **Generalized runbook** — README § "Adding another game": the repo-agnostic
+   steps for integrating any future game (check the build, look for existing
+   sub-path support, clone as a sibling, add one `GAMES` entry), plus the
+   Windows/Git-Bash gotcha hit twice while building these — a bash argument
+   that looks like an absolute path (`/play/wordle/`) gets silently rewritten
+   to a Windows path by MSYS's auto path-conversion, silently producing a
+   broken build; `MSYS_NO_PATHCONV=1` fixes it, Linux deploys are unaffected.
 
 > **Status:** Shipped.
 

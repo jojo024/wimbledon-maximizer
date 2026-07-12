@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wimbledon$ Maximizer — Play</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<main>
+  <h2 class="section-title">Play</h2>
+  <p class="section-sub">A few separate, independently-developed games live alongside the main
+    site. Pick one below — each opens in its own page, with its own save data.</p>
+
+  <div class="games-grid" id="games-grid"></div>
+</main>
+
+<script type="module">
+import { renderNav, api, esc } from "/static/wim.js";
+renderNav("/play");
+
+const games = await api("GET", "/api/games");
+document.getElementById("games-grid").innerHTML = games.map(g => `
+  <div class="game-card${g.available ? "" : " unavailable"}">
+    <div class="game-emoji">${g.emoji}</div>
+    <h3>${esc(g.name)}</h3>
+    <p>${esc(g.description)}</p>
+    ${g.available
+      ? `<a class="btn btn-green" href="/play/${g.slug}/">Play</a>`
+      : `<span class="empty-hint">Not available on this deployment</span>`}
+  </div>`).join("");
+</script>
+</body>
+</html>

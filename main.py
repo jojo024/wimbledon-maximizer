@@ -22,18 +22,26 @@ DB_PATH = BASE / "wimbledon.db"
 STATIC = BASE / "static"
 SECRET_PATH = BASE / ".wim_secret"
 ADMIN_KEY = os.environ.get("WIM_ADMIN_KEY", "wimbledon")
-# Strawberry Rush is a separate repo (github.com/jojo024/strawberry-rush) — a
-# zero-dependency static Canvas game, cloned as a sibling checkout and served
-# read-only under /play. It has its own git history, its own README, and its
-# own release cadence; this app never imports or builds any part of it.
+# Each of these is a completely separate repo — its own git history, README,
+# and release cadence. This app never imports or builds any of their code; it
+# just serves a sibling checkout (or, for the two Vite apps, their *built*
+# dist/) read-only under /play/<slug>. /play itself is a hub page (below)
+# listing whichever of these are actually present on this deployment.
 GAME_DIR = Path(os.environ.get("WIM_GAME_DIR", str(BASE.parent / "strawberry-rush")))
-# Broadcast Wordle (github.com/NickPoopy/broadcast-wordle) is likewise a
-# separate repo, but a built Vite/React app rather than zero-dependency static
-# files — WORDLE_DIR points at its *built* `dist/`, produced with
-# `VITE_BASE_PATH=/wordle/ npm run build` in that other checkout, not at the
-# repo root. Same read-only, no-import mounting as Strawberry Rush otherwise.
 WORDLE_DIR = Path(os.environ.get("WIM_WORDLE_DIR", str(BASE.parent / "broadcast-wordle" / "dist")))
 RUNNER_DIR = Path(os.environ.get("WIM_RUNNER_DIR", str(BASE.parent / "buggyrunner" / "dist")))
+
+GAMES = [
+    {"slug": "strawberry-rush", "name": "Strawberry Rush", "emoji": "🍓",
+     "description": "A broadcast engineer dashes through a posh Wimbledon garden party to reach the food truck.",
+     "dir": GAME_DIR, "repo": "jojo024/strawberry-rush"},
+    {"slug": "wordle", "name": "Broadcast Wordle", "emoji": "🎛",
+     "description": "Guess the five-letter broadcast term in six tries.",
+     "dir": WORDLE_DIR, "repo": "NickPoopy/broadcast-wordle"},
+    {"slug": "buggyrunner", "name": "BuggyRunner", "emoji": "🚗",
+     "description": "Race a rigger's buggy through the service tunnels beneath the Championships.",
+     "dir": RUNNER_DIR, "repo": "NickPoopy/buggyrunner"},
+]
 TARGET_CENTS = 3000  # exactly W$30.00
 HOST = os.environ.get("WIM_HOST", "0.0.0.0")
 PORT = int(os.environ.get("WIM_PORT", "8030"))
@@ -278,19 +286,15 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Wimbledon$ Maximizer", lifespan=lifespan)
 init_db()
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
-if GAME_DIR.is_dir():
-    app.mount("/play", StaticFiles(directory=GAME_DIR, html=True), name="play")
-else:
-    print(f"NOTE: Strawberry Rush not found at {GAME_DIR} — /play is disabled."
-          f" Clone github.com/jojo024/strawberry-rush there (or set"
-          f" WIM_GAME_DIR) to enable it.", flush=True)
-if WORDLE_DIR.is_dir():
-    app.mount("/wordle", StaticFiles(directory=WORDLE_DIR, html=True), name="wordle")
-else:
-    print(f"NOTE: Broadcast Wordle build not found at {WORDLE_DIR} — /wordle is"
-          f" disabled. Clone github.com/NickPoopy/broadcast-wordle as a sibling"
-          f" checkout and run 'VITE_BASE_PATH=/wordle/ npm run build' there (or"
-          f" set WIM_WORDLE_DIR) to enable it.", flush=True)
+for _game in GAMES:
+    if _game["dir"].is_dir():
+        app.mount(f"/play/{_game['slug']}", StaticFiles(directory=_game["dir"], html=True),
+                   name=f"play_{_game['slug']}")
+    else:
+        print(f"NOTE: {_game['name']} not found at {_game['dir']} —"
+              f" /play/{_game['slug']} is disabled. Clone"
+              f" github.com/{_game['repo']} as a sibling checkout"
+              f" (building it first, if it needs one) to enable it.", flush=True)
 
 
 # ---------- request origin (proxy-aware) ----------
@@ -504,14 +508,6 @@ def top_comment(conn, combo_id: int) -> dict | None:
     return {"author": row["author"], "text": row["text"], "votes": row["votes"]}
 
 
-if RUNNER_DIR.is_dir():
-    app.mount("/runner", StaticFiles(directory=RUNNER_DIR, html=True), name="runner")
-else:
-    print(f"NOTE: BuggyRunner build not found at {RUNNER_DIR} — /runner is"
-          f" disabled. Clone github.com/NickPoopy/buggyrunner as a sibling"
-          f" checkout and run 'VITE_BASE_PATH=/runner/ npm run build' there (or"
-          f" set WIM_RUNNER_DIR) to enable it.", flush=True)
-
 # ---------- pages ----------
 
 @app.get("/")
@@ -537,6 +533,22 @@ def page_tips():
 @app.get("/admin")
 def page_admin():
     return FileResponse(STATIC / "admin.html")
+
+
+@app.get("/play")
+def page_play():
+    return FileResponse(STATIC / "play.html")
+
+
+@app.get("/api/games")
+def get_games():
+    """One entry per companion game mounted under /play/<slug> — whichever of
+    them actually have a checkout (and, for the Vite ones, a build) present on
+    this deployment. Backs the /play hub page; nothing here is authenticated,
+    it's just a directory-existence check mirroring the startup mount logic."""
+    return [{"slug": g["slug"], "name": g["name"], "emoji": g["emoji"],
+             "description": g["description"], "available": g["dir"].is_dir()}
+            for g in GAMES]
 
 
 # ---------- session API ----------

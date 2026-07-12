@@ -36,8 +36,9 @@ On first run `wimbledon.db` (SQLite) is created next to `main.py` and seeded wit
 | `WIM_PORT` | `8030` | HTTP port |
 | `WIM_SECRET` | auto-generated | HMAC secret for signing session cookies. If unset, a random secret is generated once and persisted to `.wim_secret` (gitignored) so sessions survive restarts. |
 | `WIM_FORWARDED_ALLOW_IPS` | `127.0.0.1` | Passed straight to uvicorn's `forwarded_allow_ips`: only connections from these addresses have their `X-Forwarded-For`/`X-Forwarded-Proto` headers trusted for the real client IP/scheme (used by rate limiting and the cookie's `Secure` flag). The default matches the documented `WIM_HOST=127.0.0.1`-behind-Caddy setup; leave it alone unless your reverse proxy runs somewhere else. |
-| `WIM_GAME_DIR` | `../strawberry-rush` | Path to a [strawberry-rush](https://github.com/jojo024/strawberry-rush) checkout, served read-only at `/play`. If the directory doesn't exist, `/play` is simply disabled (a one-line startup note, not an error) — this app runs fine without it. |
-| `WIM_WORDLE_DIR` | `../broadcast-wordle/dist` | Path to a **built** [broadcast-wordle](https://github.com/NickPoopy/broadcast-wordle) (`VITE_BASE_PATH=/wordle/ npm run build` in that checkout), served read-only at `/wordle`. Same graceful disable if missing. |
+| `WIM_GAME_DIR` | `../strawberry-rush` | Path to a [strawberry-rush](https://github.com/jojo024/strawberry-rush) checkout, served read-only at `/play/strawberry-rush`. Missing directory → that entry just doesn't appear on the `/play` hub (a one-line startup note, not an error). |
+| `WIM_WORDLE_DIR` | `../broadcast-wordle/dist` | Path to a **built** [broadcast-wordle](https://github.com/NickPoopy/broadcast-wordle) (`VITE_BASE_PATH=/play/wordle/ npm run build` in that checkout), served read-only at `/play/wordle`. Same graceful disable if missing. |
+| `WIM_RUNNER_DIR` | `../buggyrunner/dist` | Path to a **built** [buggyrunner](https://github.com/NickPoopy/buggyrunner) (`BASE_PATH=/play/buggyrunner/ npm run build` in that checkout — note: `BASE_PATH`, not `VITE_BASE_PATH`, this repo's own env var name), served read-only at `/play/buggyrunner`. Same graceful disable if missing. |
 
 Change the admin key before letting anyone else reach this — on a LAN or the internet.
 
@@ -69,6 +70,8 @@ static/
   meals.html         add-meal form with a large food/drink emoji picker + meal pool listing
   admin.html         admin console (meals / combos / daily deals / comments / tips tabs,
                       combo item editor, honourable-mention combo creator)
+  play.html          the /play hub: fetches /api/games, renders a card per companion
+                      game (only the ones actually present on this deployment)
 wimbledon.db         SQLite database (created at runtime, not committed)
 .wim_secret          auto-generated HMAC secret for session cookies (created at runtime, not committed)
 deploy/
@@ -77,21 +80,31 @@ deploy/
   wimbledon-maximizer.env.example    template for the real env file (gitignored)
 ```
 
-Not part of this repo, but expected as **sibling directories** one level up
-(overridable with `WIM_GAME_DIR` / `WIM_WORDLE_DIR`), each mounted read-only
-and with no import of its code:
+`/play` is a **hub page**, not a game itself — it fetches `/api/games` and
+shows a card (with a Play button) for each companion game actually present on
+this deployment. Every game is a completely separate repo, not part of this
+one, expected as a **sibling directory** one level up (paths overridable via
+`WIM_GAME_DIR` / `WIM_WORDLE_DIR` / `WIM_RUNNER_DIR`), mounted read-only at
+`/play/<slug>` with no import of its code:
 
-- `../strawberry-rush` — [jojo024/strawberry-rush](https://github.com/jojo024/strawberry-rush),
-  a zero-dependency static Canvas game. Served straight off its checkout at
-  `/play`; a `git pull` there is the entire update, no rebuild needed.
-- `../broadcast-wordle/dist` — [NickPoopy/broadcast-wordle](https://github.com/NickPoopy/broadcast-wordle),
+- `../strawberry-rush` → `/play/strawberry-rush` — [jojo024/strawberry-rush](https://github.com/jojo024/strawberry-rush),
+  a zero-dependency static Canvas game. Served straight off its checkout; a
+  `git pull` there is the entire update, no rebuild needed.
+- `../broadcast-wordle/dist` → `/play/wordle` — [NickPoopy/broadcast-wordle](https://github.com/NickPoopy/broadcast-wordle),
   a Vite/React app, so unlike the other one it needs an actual build:
-  `VITE_BASE_PATH=/wordle/ npm run build` in that checkout produces the
-  `dist/` this app serves at `/wordle`. Updating it is `git pull` **then**
-  rebuild — the `dist/` from the last build keeps serving until you do.
+  `VITE_BASE_PATH=/play/wordle/ npm run build` in that checkout produces the
+  `dist/` this app serves. Updating it is `git pull` **then** rebuild — the
+  `dist/` from the last build keeps serving until you do.
+- `../buggyrunner/dist` → `/play/buggyrunner` — [NickPoopy/buggyrunner](https://github.com/NickPoopy/buggyrunner),
+  also Vite (Phaser this time), same deal: `BASE_PATH=/play/buggyrunner/ npm
+  run build` (this repo's build reads `BASE_PATH`, not `VITE_BASE_PATH` —
+  check the target repo's own `vite.config.ts` rather than assuming).
 
-Both are optional: if a directory isn't present, its route is simply disabled
-(a one-line startup note, not an error) and everything else runs normally.
+All three are optional and independent: if a directory isn't present, that
+one entry just doesn't show up on the `/play` hub (a one-line startup note,
+not an error) and everything else — including the other games — runs
+normally. See [Adding another game](#adding-another-game) below to add a new
+one.
 
 ## API overview
 
@@ -170,24 +183,33 @@ cd /opt/wimbledon-maximizer
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 
-# 3b. Optional: Strawberry Rush (separate repo, enables /play) as a sibling
-#     checkout — /opt/strawberry-rush, next to /opt/wimbledon-maximizer.
-#     Skip this and /play just stays disabled; nothing else depends on it.
+# 3b. Optional: Strawberry Rush (separate repo, enables the /play/strawberry-rush
+#     card) as a sibling checkout — /opt/strawberry-rush, next to
+#     /opt/wimbledon-maximizer. Skip this and that entry just doesn't appear
+#     on the /play hub; nothing else depends on it.
 git clone https://github.com/jojo024/strawberry-rush.git /opt/strawberry-rush
 
-# 3c. Optional: Broadcast Wordle (separate repo, enables /wordle) — this one
-#     needs an actual build (it's Vite/React, not zero-dependency static files),
-#     which needs Node 20+. Ubuntu's own `apt install nodejs` gives you
-#     whatever old version is in the distro repos (18.x on 22.04) — use
-#     NodeSource instead, or the build fails with "Dynamic require of
-#     workbox-build is not supported" deep in vite-plugin-pwa.
-#     Skip all of this and /wordle just stays disabled; nothing else depends on it.
+# 3c/3d. Optional: Broadcast Wordle and BuggyRunner (enable the matching /play
+#     cards) — both need an actual build (Vite, not zero-dependency static
+#     files), which needs Node 20+. Ubuntu's own `apt install nodejs` gives
+#     you whatever old version is in the distro repos (18.x on 22.04) — use
+#     NodeSource instead, or the build fails partway (e.g. "Dynamic require of
+#     workbox-build is not supported" deep in vite-plugin-pwa for Wordle).
+#     Skip all of this and those entries just don't appear on /play; nothing
+#     else depends on them.
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt-get install -y nodejs
+
 git clone https://github.com/NickPoopy/broadcast-wordle.git /opt/broadcast-wordle
 cd /opt/broadcast-wordle
 npm ci
-VITE_BASE_PATH=/wordle/ npm run build
+VITE_BASE_PATH=/play/wordle/ npm run build
+cd /opt/wimbledon-maximizer
+
+git clone https://github.com/NickPoopy/buggyrunner.git /opt/buggyrunner
+cd /opt/buggyrunner
+npm ci
+BASE_PATH=/play/buggyrunner/ npm run build
 cd /opt/wimbledon-maximizer
 
 # 4. Configure secrets
@@ -199,6 +221,7 @@ sudo useradd -r -s /usr/sbin/nologin wimbledon || true
 sudo chown -R wimbledon:wimbledon /opt/wimbledon-maximizer
 sudo chown -R wimbledon:wimbledon /opt/strawberry-rush 2>/dev/null || true  # only if step 3b was done
 sudo chown -R wimbledon:wimbledon /opt/broadcast-wordle 2>/dev/null || true # only if step 3c was done
+sudo chown -R wimbledon:wimbledon /opt/buggyrunner 2>/dev/null || true      # only if step 3d was done
 sudo cp deploy/wimbledon-maximizer.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now wimbledon-maximizer
@@ -232,16 +255,21 @@ guarded `ALTER TABLE ... ADD COLUMN`), so a schema change ships the same way as 
 one-line copy fix — no separate migration step, and the live `wimbledon.db` is
 never dropped or recreated by a restart.
 
-Strawberry Rush is a fully separate deploy, on its own schedule: `cd
-/opt/strawberry-rush && git pull` picks up a new version — no restart of the
-wimbledon-maximizer service needed, since it's served directly off disk by
-`StaticFiles` on every request, not loaded into the process at startup.
+Each `/play` game is a fully separate deploy, on its own schedule, and none of
+them need a wimbledon-maximizer restart to pick up — `StaticFiles` reads from
+disk on every request, not from anything loaded into the process at startup:
 
-Broadcast Wordle is separate too, but needs its build step re-run since
-`/wordle` serves its `dist/`, not its source: `cd /opt/broadcast-wordle && git
-pull && npm ci && VITE_BASE_PATH=/wordle/ npm run build` — no restart of the
-wimbledon-maximizer service needed either, same reasoning as above. The old
-`dist/` keeps serving without interruption until the new build finishes.
+- Strawberry Rush: `cd /opt/strawberry-rush && git pull` is the entire update.
+- Broadcast Wordle: `cd /opt/broadcast-wordle && git pull && npm ci &&
+  VITE_BASE_PATH=/play/wordle/ npm run build` — needs the rebuild since
+  `/play/wordle` serves its `dist/`, not its source. The old `dist/` keeps
+  serving without interruption until the new build finishes.
+- BuggyRunner: same idea — `cd /opt/buggyrunner && git pull && npm ci &&
+  BASE_PATH=/play/buggyrunner/ npm run build`.
+
+The one time a restart *is* needed is enabling a game for the first time (its
+directory not existing yet vs. existing is checked once, at startup) — after
+that, updates to an already-enabled game never need one.
 
 A few habits worth keeping as this grows:
 - `sudo journalctl -u wimbledon-maximizer -f` to watch logs / catch the startup
@@ -253,6 +281,59 @@ A few habits worth keeping as this grows:
 - The Housekeeping section of [TODO.md](TODO.md) has the next real investments here
   — a pytest suite and GitHub Actions CI — worth doing once bugs start slipping
   through manual smoke-testing.
+
+## Adding another game
+
+The `/play` hub is designed to take more entries without touching its own
+page — every new game follows the same handful of steps, whether it's
+zero-dependency static files (Strawberry Rush) or a Vite build (Wordle,
+BuggyRunner):
+
+1. **Check the target repo's build.** Does it produce static files with no
+   build step, or does it need `npm run build`? If a build, does it already
+   support a non-root base path? Look at its bundler config (`vite.config.ts`,
+   webpack config, etc.) for something reading an env var into a `base`/
+   `publicPath` option — Wordle and BuggyRunner both already had this because
+   they were built with GitHub Pages sub-path hosting in mind, which
+   generalizes to this app's `/play/<slug>` mounting perfectly. **The env var
+   name isn't standardized** — check what the repo's own config actually
+   reads (`VITE_BASE_PATH`, `BASE_PATH`, something else) rather than assuming
+   it matches another game you've already integrated.
+   If a build step exists but has no base-path support at all, you'll need to
+   add one upstream first (or fork it) — a build that hardcodes absolute
+   root-relative asset paths (`/assets/...`) will 404 once served from a
+   sub-path.
+2. **Clone it as a sibling checkout** — next to `wimbledon-maximizer/`, not
+   inside it: `git clone <repo-url> ../<repo-name>` (locally) or
+   `/opt/<repo-name>` (on the server, next to `/opt/wimbledon-maximizer`).
+3. **If it needs a build:** `npm ci` then the build command with the base
+   path set to `/play/<slug>/` (trailing slash matters), e.g.
+   `VITE_BASE_PATH=/play/<slug>/ npm run build`. Confirm it worked by
+   checking the built `index.html`'s asset `<script src>`/`<link href>`
+   values actually start with `/play/<slug>/` — if they're still `/` or a
+   mangled filesystem path, the env var name is wrong or a shell mangled it
+   (see the Git Bash / MSYS gotcha below).
+4. **Add three things to `main.py`:**
+   - A `..._DIR` constant: `Path(os.environ.get("WIM_..._DIR", str(BASE.parent
+     / "<repo-name>")))` — point it at the built `dist/` if there's a build
+     step, at the repo root if it's zero-dependency static files.
+   - An entry in the `GAMES` list: `slug`, `name`, `emoji`, `description`,
+     `dir` (the constant above), `repo` (`owner/name`, for the disabled-state
+     log message).
+   - Nothing else — the mounting loop, the disabled-state fallback, and the
+     `/api/games` endpoint the hub page reads from all already iterate `GAMES`
+     generically.
+5. **Rebuild/re-clone, restart the service, check `/play`.** The new card
+   appears automatically once its directory exists; nothing to touch in
+   `play.html` or `wim.js`.
+
+**Gotcha to know about up front:** on Git Bash / MSYS (Windows), a bash
+argument that *looks like* an absolute path (anything starting with `/`) gets
+silently rewritten to a Windows path — so `VITE_BASE_PATH=/play/wordle/ npm
+run build` becomes `VITE_BASE_PATH=C:/Program Files/Git/play/wordle/ ...` and
+the build silently produces broken asset paths. Prefix the command with
+`MSYS_NO_PATHCONV=1` when building locally on Windows; this doesn't apply on
+the Linux VPS.
 
 ## Development
 
