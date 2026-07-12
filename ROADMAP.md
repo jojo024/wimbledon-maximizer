@@ -481,6 +481,41 @@ ratings and comments, admin console, W$ glyph, purple/green futuristic theme.
 
 > **Status:** Shipped.
 
+## v0.3.15 — Broadcast Wordle integration
+
+| # | Item | Effort | Why now |
+|---|------|--------|---------|
+| 1 | Mount [NickPoopy/broadcast-wordle](https://github.com/NickPoopy/broadcast-wordle) at `/wordle` | S | User wants a second companion game, developed as its own (third-party, MIT-licensed) repo, same "two repositories" pattern established for Strawberry Rush |
+
+### Item details
+
+1. **Built-output mount** — `main.py`. `WORDLE_DIR = Path(os.environ.get(
+   "WIM_WORDLE_DIR", str(BASE.parent / "broadcast-wordle" / "dist")))`, mounted
+   at `/wordle` via `StaticFiles(directory=WORDLE_DIR, html=True)` only
+   `if WORDLE_DIR.is_dir()` — same graceful disable as Strawberry Rush. The
+   key difference: broadcast-wordle is a Vite/React/TypeScript app, not
+   zero-dependency static files, so `WORDLE_DIR` must point at its *built*
+   `dist/`, produced with `VITE_BASE_PATH=/wordle/ npm run build` in that
+   checkout — its `vite.config.ts` already reads `VITE_BASE_PATH` to support
+   exactly this kind of sub-path hosting (it was written with GitHub Pages'
+   `/repo-name/` hosting in mind, which turned out to generalize perfectly
+   here). Verified end-to-end with a real headless-Chrome session
+   (`playwright-core` against the machine's existing Chrome, same one-off
+   approach as the coverflow-scroll testing): page loads, a guess types and
+   colors correctly, zero console errors.
+   `static/wim.js`'s `renderNav()` gets a "🎛 Wordle" link.
+2. **Deploy note: Node version matters here** — unlike Strawberry Rush (no
+   build, no Node needed at all), this one needs Node 20+ to build. Discovered
+   live during the first production deploy attempt: Ubuntu's `apt install
+   nodejs` on the VPS resolved to Node 18.19.1, which built fine right up until
+   `vite-plugin-pwa`'s workbox-build step, which failed with "Dynamic require
+   of workbox-build is not supported" — a Node-version-specific ESM/CJS
+   interop gap, not a config mistake. Fixed by installing Node 20+ via
+   NodeSource instead of the distro package; documented in README's deploy
+   steps so the next setup doesn't hit the same wall.
+
+> **Status:** Shipped.
+
 ## v0.4.0 — Seasons and polish
 
 | # | Item | Effort | Why now |
